@@ -4,7 +4,7 @@ import GlintCore
 
 /// Built-in actions implemented natively.
 enum BuiltinID: String, CaseIterable {
-    case installExtension, search, cut, copy, paste, pasteMatchStyle, openLink, newMail, revealInFinder, lookUp,
+    case installExtension, search, cut, copy, paste, pasteMatchStyle, openLink, newMail, call, revealInFinder, lookUp,
          spelling, formatting, speak, stats, calculate
 
     var name: String {
@@ -17,6 +17,7 @@ enum BuiltinID: String, CaseIterable {
         case .pasteMatchStyle: return "Paste and Match Style"
         case .openLink: return "Open Link"
         case .newMail: return "New Email"
+        case .call: return "Call"
         case .revealInFinder: return "Reveal in Finder"
         case .lookUp: return "Look Up"
         case .spelling: return "Spelling"
@@ -38,6 +39,7 @@ enum BuiltinID: String, CaseIterable {
         case .pasteMatchStyle: return "symbol:list.clipboard"
         case .openLink: return "symbol:safari"
         case .newMail: return "symbol:envelope"
+        case .call: return "symbol:phone"
         case .revealInFinder: return "symbol:folder"
         case .lookUp: return "symbol:character.book.closed"
         case .spelling: return "symbol:textformat.abc.dottedunderline"
@@ -53,11 +55,12 @@ enum BuiltinID: String, CaseIterable {
         case .installExtension: return "Appears when you select an extension snippet (text starting with #glint or #popclip)."
         case .search: return "Search the web for the selected text with your chosen search engine."
         case .cut: return "Cut the selection. Only in editable text."
-        case .copy: return "Copy the selection."
+        case .copy: return "Copy the selection. Hold ⇧ to append it to the text already on the clipboard."
         case .paste: return "Paste over the selection, or at the cursor after a long press."
         case .pasteMatchStyle: return "Paste plain text, matching the surrounding style. Hold ⌥ on Paste to do the same."
         case .openLink: return "Open the selected link(s) in your browser. ⌘ opens in the background, ⇧ copies the link."
         case .newMail: return "Start a new email to the selected address."
+        case .call: return "Call the selected phone number with FaceTime or your iPhone."
         case .revealInFinder: return "Show the selected file path in Finder."
         case .lookUp: return "Show the dictionary definition."
         case .spelling: return "Suggest corrections for a misspelled word and replace it."
@@ -70,7 +73,7 @@ enum BuiltinID: String, CaseIterable {
 
     var defaultEnabled: Bool {
         switch self {
-        case .speak, .pasteMatchStyle: return false
+        case .speak, .pasteMatchStyle, .call: return false
         default: return true
         }
     }

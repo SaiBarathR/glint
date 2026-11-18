@@ -79,6 +79,8 @@ enum ActionBuilder {
             return [make(b, entry, title: "Open \(detected.urls.count) Links", icon: "symbol:square.stack.3d.up")]
         case .newMail:
             return detected.emails.isEmpty ? [] : [make(b, entry, title: "Email \(detected.emails[0])")]
+        case .call:
+            return detected.phoneNumbers.count == 1 && text.count < 40 ? [make(b, entry, title: "Call \(detected.phoneNumbers[0])")] : []
         case .revealInFinder:
             return detected.paths.isEmpty ? [] : [make(b, entry)]
         case .lookUp:

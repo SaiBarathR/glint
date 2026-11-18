@@ -56,8 +56,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
         }
     }
 
-    private func installBundle(at url: URL) {
+    private func installBundle(at original: URL) {
+        var url = original
         do {
+            // Zipped packages (.glintextz / .popclipextz): expand first.
+            if ["glintextz", "popclipextz", "zip"].contains(url.pathExtension.lowercased()) {
+                url = try Self.unzipExtension(url)
+            }
             let manifest = try ExtensionLoader.loadBundle(at: url)
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
@@ -74,6 +79,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             NSApp.activate(ignoringOtherApps: true)
             NSAlert(error: error).runModal()
         }
+    }
+
+    static func unzipExtension(_ zip: URL) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("glint-unzip-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        p.arguments = ["-x", "-k", zip.path, dir.path]
+        try p.run()
+        p.waitUntilExit()
+        let items = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        if let bundle = items.first(where: { ["glintext", "popclipext"].contains($0.pathExtension.lowercased()) }) { return bundle }
+        if items.count == 1 { return items[0] }
+        return dir
     }
 
     /// glint://install?snippet=<url-encoded snippet>, glint://settings, glint://pause, glint://resume
@@ -153,7 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             let allowFallback = trigger == .hotKey || trigger == .keyboard || iBeam
             guard let sel = await SelectionReader.capture(mouse: trigger.isMouse ? mouse : nil,
                                                           allowCopyFallback: allowFallback,
-                                                          pasteOnly: trigger == .longPress) else { return }
+                                                          pasteOnly: trigger == .longPress,
+                                                          requireNearMouse: trigger.isMouse && !iBeam) else { return }
             if Task.isCancelled { return }
             // Re-clicking an already-shown selection shouldn't flash the bar again.
             if trigger == .shiftClick, sel.context.text == lastShownText, Date().timeIntervalSince(lastShownAt) < 0.5 { return }

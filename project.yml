@@ -47,6 +47,10 @@ targets:
             LSHandlerRank: Owner
             LSTypeIsPackage: true
             LSItemContentTypes: [dev.saibarath.glint.extension]
+          - CFBundleTypeName: Zipped Glint Extension
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            CFBundleTypeExtensions: [glintextz]
           - CFBundleTypeName: PopClip Extension
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate

@@ -196,6 +196,7 @@ final class PopupController {
         view.setItems(items) // re-layout with final arrow direction
         content = view
         panel.contentView = view
+        panel.invalidateShadow()
         let frame = NSRect(origin: origin, size: NSSize(width: width, height: height))
 
         if animate {

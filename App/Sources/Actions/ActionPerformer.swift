@@ -62,7 +62,17 @@ final class ActionPerformer: ActionHost {
             popup.dismiss()
             KeySender.command(.cut)
         case .copy:
-            KeySender.command(.copy)
+            if mods.contains(.shift), let existing = Clipboard.string, !existing.isEmpty {
+                // Append to what's already on the clipboard.
+                Clipboard.setString(existing + (existing.hasSuffix("\n") ? "" : "\n") + ctx.text)
+            } else {
+                KeySender.command(.copy)
+                // Apps that don't support ⌘C from a background click still get the text.
+                let before = NSPasteboard.general.changeCount
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    if NSPasteboard.general.changeCount == before { Clipboard.setString(ctx.text) }
+                }
+            }
             popup.showStatus(success: true)
         case .paste:
             popup.dismiss()
@@ -81,6 +91,10 @@ final class ActionPerformer: ActionHost {
         case .newMail:
             popup.dismiss()
             if let email = detected.emails.first, let u = URL(string: "mailto:\(email)") { NSWorkspace.shared.open(u) }
+        case .call:
+            popup.dismiss()
+            let digits = (detected.phoneNumbers.first ?? text).filter { $0.isNumber || $0 == "+" }
+            if let u = URL(string: "tel:" + digits) { NSWorkspace.shared.open(u) }
         case .revealInFinder:
             popup.dismiss()
             NSWorkspace.shared.activateFileViewerSelecting(detected.paths.map { URL(fileURLWithPath: $0) })

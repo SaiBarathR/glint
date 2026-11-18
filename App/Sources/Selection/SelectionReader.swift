@@ -18,7 +18,8 @@ enum SelectionReader {
     ///   - mouse: mouse location for anchoring when the selection rect is unknown.
     ///   - allowCopyFallback: may send ⌘C when Accessibility returns nothing.
     ///   - pasteOnly: build a context for a long-press "Paste" bar instead.
-    static func capture(mouse: CGPoint?, allowCopyFallback: Bool, pasteOnly: Bool = false) async -> CapturedSelection? {
+    static func capture(mouse: CGPoint?, allowCopyFallback: Bool, pasteOnly: Bool = false,
+                        requireNearMouse: Bool = false) async -> CapturedSelection? {
         let prefs = Preferences.shared
         guard let app = NSWorkspace.shared.frontmostApplication, app.bundleIdentifier != ownBundleID else { return nil }
         if prefs.isExcluded(bundleID: app.bundleIdentifier) { return nil }
@@ -47,6 +48,11 @@ enum SelectionReader {
         }
         if !pasteOnly, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
         if text.count > prefs.maxTextLength { return nil }
+        // When the pointer wasn't over text (e.g. a window drag), only trust a selection that sits under the mouse,
+        // otherwise an old selection in another field would make the bar appear.
+        if requireNearMouse, !pasteOnly {
+            guard let mouse, let bounds, bounds.insetBy(dx: -40, dy: -40).contains(mouse) else { return nil }
+        }
 
         let menu = await Task.detached(priority: .userInitiated) { AX.menuCommands(pid: pid) }.value
         let clipboard = await MainActor.run { Clipboard.string }
