@@ -18,6 +18,14 @@ public enum ContentDetector {
         pattern: #"(?<![@\w.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|org|net|io|dev|app|co|ai|edu|gov|me|info|xyz|uk|de|in|jp|fr|tv|ly|gg|sh|so|to|us|ca|au|nz|eu|ch|nl|se|no|es|it|be|at|dk|fi|pl|ru|br|cn|kr|news|blog|page|site|tech|cloud)(?:/[^\s]*)?)(?![\w.-])"#,
         options: [.caseInsensitive])
 
+    /// The whole text has a phone number's shape: a leading +, an area code in parentheses, or 3-4 / 3-3-4
+    /// digit grouping.
+    static func looksLikePhoneNumber(_ s: String) -> Bool {
+        let patterns = [#"^\+\d[\d\s().-]{6,}$"#, #"^\(\d{2,4}\)\s?\d[\d\s.-]{4,}$"#,
+                        #"^\d{3}[-. ]\d{4}$"#, #"^\d{3}[-. ]\d{3}[-. ]\d{4}$"#]
+        return patterns.contains { s.range(of: $0, options: .regularExpression) != nil }
+    }
+
     public static func detect(in text: String) -> DetectedContent {
         var result = DetectedContent()
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,8 +69,8 @@ public enum ContentDetector {
             if FileManager.default.fileExists(atPath: path) { result.paths.append(path) }
         }
 
-        // Phone numbers like 555-1234 aren't subtraction.
-        if trimmed.count <= 200, result.phoneNumbers.isEmpty, Calculator.looksLikeExpression(trimmed), let value = try? Calculator.evaluate(trimmed) {
+        // Phone numbers like 555-1234 aren't subtraction (but 5000-2500 is).
+        if trimmed.count <= 200, !looksLikePhoneNumber(trimmed), Calculator.looksLikeExpression(trimmed), let value = try? Calculator.evaluate(trimmed) {
             result.mathResult = Calculator.format(value)
         }
         return result

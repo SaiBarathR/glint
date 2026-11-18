@@ -268,10 +268,15 @@ final class ActionRegistry: ObservableObject {
     /// Moves other user-installed copies of the same extension (e.g. an older "Sort.popclipext" when
     /// "Sort 2.popclipext" was installed) to the Trash, so the new version is the one that loads.
     private func removeOtherCopies(of m: ExtensionManifest) {
-        let keep = (m.sourceURL ?? m.bundleURL)?.standardizedFileURL
+        // Compare by file identity: the volume is usually case-insensitive, so "sort.popclipext" may be the
+        // same folder as "Sort.popclipext".
+        func fileID(_ url: URL?) -> NSObject? {
+            (try? url?.resourceValues(forKeys: [.fileResourceIdentifierKey]))?.fileResourceIdentifier as? NSObject
+        }
+        guard let keep = fileID(m.sourceURL ?? m.bundleURL) else { return }
         for other in ExtensionLoader.loadAll(in: Self.userExtensionsDirectory).extensions
         where other.identifier == m.identifier {
-            guard let url = (other.sourceURL ?? other.bundleURL)?.standardizedFileURL, url != keep else { continue }
+            guard let url = other.sourceURL ?? other.bundleURL, let id = fileID(url), !id.isEqual(keep) else { continue }
             try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
         }
     }

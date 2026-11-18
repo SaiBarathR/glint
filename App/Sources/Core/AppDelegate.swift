@@ -135,9 +135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     // MARK: Hotkeys
 
     private func observeHotKeys() {
-        prefs.$showBarHotKey.combineLatest(prefs.$actionHotKeys)
+        // Re-register when shortcuts change or extensions reload (an extension may have appeared or gone).
+        prefs.$showBarHotKey.combineLatest(prefs.$actionHotKeys, ActionRegistry.shared.$entries.map { $0.map(\.key) })
             .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
-            .sink { [weak self] showBar, actionKeys in self?.registerHotKeys(showBar: showBar, actionKeys: actionKeys) }
+            .sink { [weak self] showBar, actionKeys, _ in self?.registerHotKeys(showBar: showBar, actionKeys: actionKeys) }
             .store(in: &cancellables)
     }
 
@@ -148,7 +149,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
            !center.register(showBar, handler: { [weak self] in self?.capture(trigger: .hotKey, mouse: NSEvent.mouseLocation, iBeam: false) }) {
             performer.log("The show-bar shortcut \(showBar) is used by another app and couldn't be registered.", extensionID: "glint")
         }
-        for (key, combo) in actionKeys.sorted(by: { $0.key < $1.key }) {
+        // Shortcuts of extensions that no longer exist are kept (they come back if it's reinstalled) but inactive.
+        for (key, combo) in actionKeys.sorted(by: { $0.key < $1.key }) where ActionRegistry.shared.entry(key) != nil {
             if !center.register(combo, handler: { [weak self] in self?.runActionHotKey(key) }) {
                 performer.log("Shortcut \(combo) for \(key) is already in use and couldn't be registered.", extensionID: "glint")
             }

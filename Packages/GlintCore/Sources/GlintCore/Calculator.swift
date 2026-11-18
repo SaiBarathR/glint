@@ -10,7 +10,7 @@ public enum Calculator {
         let t = s.replacingOccurrences(of: " ", with: "")
         guard t.count >= 3 else { return false }
         // Dates (2026-11-18, 10/12/2026, 18.11.2026) and times aren't arithmetic.
-        let datePatterns = [#"^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$"#, #"^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$"#]
+        let datePatterns = [#"^\d{4}([-/.])\d{1,2}\1\d{1,2}$"#, #"^\d{1,2}([-/.])\d{1,2}\1\d{2,4}$"#]
         if datePatterns.contains(where: { t.range(of: $0, options: .regularExpression) != nil }) { return false }
         // Must contain at least one operator between operands and one digit.
         guard t.rangeOfCharacter(from: .decimalDigits) != nil else { return false }

@@ -150,7 +150,8 @@ final class HotKeyRecorderModel: ObservableObject {
         let combo = KeyCombo(keyCode: event.keyCode, modifiers: KeyCombo.ModifierFlags(rawValue: Int(mods.rawValue)))
         // A shortcut can only do one thing: refuse one that is already assigned elsewhere.
         let prefs = Preferences.shared
-        let inUse = (prefs.showBarHotKey == combo ? 1 : 0) + prefs.actionHotKeys.values.filter { $0 == combo }.count
+        let live = prefs.actionHotKeys.filter { ActionRegistry.shared.entry($0.key) != nil }
+        let inUse = (prefs.showBarHotKey == combo ? 1 : 0) + live.values.filter { $0 == combo }.count
         if inUse > 0, combo != current {
             NSSound.beep()
             conflict = true

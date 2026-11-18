@@ -15,6 +15,7 @@ shell script: |
       "~"*) p="$HOME${p#\~}" ;;
       file://*) p=$(/usr/bin/osascript -l JavaScript -e 'function run(a) { return decodeURIComponent(a[0].replace(/^file:\/\//, "")) }' "$p") ;;
     esac
+    case "$p" in /*) ;; *) continue ;; esac  # only absolute paths, like the path detector
     if [ -e "$p" ]; then target="$p"; break; fi
   done
   [ -n "$target" ] || { echo "The selection doesn't contain an existing path" >&2; exit 1; }

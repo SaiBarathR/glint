@@ -353,3 +353,16 @@ final class ReviewRoundTwelveTests: XCTestCase {
         XCTAssertEqual(ContentDetector.detect(in: "10/4").mathResult, "2.5")
     }
 }
+
+final class ReviewRoundThirteenTests: XCTestCase {
+    func testSubtractionAndDecimalsStillCalculate() {
+        for (expr, result) in [("5000-2500", "2500"), ("3600-1800", "1800"), ("45000 - 12500", "32500"),
+                               ("100-20-30", "50"), ("(20000-15000)*2", "10000"), ("12.5/100", "0.125"),
+                               ("19.99-10", "9.99"), ("99.5 - 10", "89.5"), ("2024-1999", "25")] {
+            XCTAssertEqual(ContentDetector.detect(in: expr).mathResult, result, expr)
+        }
+        for notMath in ["555-1234", "+91 98765 43210", "(555) 123-4567", "555-123-4567", "2026-11-18", "10/12/2026"] {
+            XCTAssertNil(ContentDetector.detect(in: notMath).mathResult, notMath)
+        }
+    }
+}
