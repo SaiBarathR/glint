@@ -10,9 +10,13 @@ enum KeySender {
         press(keyCode: CGKeyCode(combo.keyCode), flags: cgFlags(combo.modifiers))
     }
 
-    static func press(keyCode usKeyCode: CGKeyCode, flags: CGEventFlags) {
-        // Codes are US-layout positions; type the same character on the user's layout.
-        let keyCode = CGKeyCode(KeyLayout.translate(UInt16(usKeyCode), command: flags.contains(.maskCommand)))
+    static func press(keyCode usKeyCode: CGKeyCode, flags inFlags: CGEventFlags) {
+        // Codes are US-layout positions; type the same character on the user's layout (adding Shift when the
+        // character lives on the shifted level there).
+        let t = KeyLayout.translate(UInt16(usKeyCode), command: inFlags.contains(.maskCommand))
+        let keyCode = CGKeyCode(t.code)
+        var flags = inFlags
+        if t.needsShift { flags.insert(.maskShift) }
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
         down.flags = flags

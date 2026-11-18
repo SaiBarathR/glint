@@ -84,21 +84,17 @@ enum Clipboard {
     private static func returnBorrowed() {
         // A Glint ⌘C is in flight: its restore will re-base the change count. Decide once it has settled.
         if copyOutstanding, borrowed != nil {
+            // Runs again as soon as the ⌘C settles (settleOutstandingCopy); the timer is only a safety net.
+            waitingForCopy = true
             let work = DispatchWorkItem { returnBorrowed() }
             restoreWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
             return
         }
+        waitingForCopy = false
         if let s = borrowed, pb.changeCount == borrowedChangeCount { restore(s) }
         borrowed = nil
         restoreWork = nil
-    }
-
-    /// Puts a borrowed clipboard back right away (before reading the clipboard for something else).
-    static func flushPendingReturn() {
-        guard let work = restoreWork else { return }
-        work.cancel()
-        returnBorrowed()
     }
 
     /// A deliberate copy: replaces the clipboard and cancels any pending restore so it stays.
@@ -118,6 +114,18 @@ enum Clipboard {
 
     /// True while a ⌘C sent by Glint hasn't been answered (or given up on) yet.
     private(set) static var copyOutstanding = false
+
+    /// Marks the outstanding ⌘C as settled and runs a paste-result return that was waiting for it.
+    private static func settleOutstandingCopy() {
+        copyOutstanding = false
+        if borrowed != nil, let work = restoreWork, work.isCancelled == false, waitingForCopy {
+            waitingForCopy = false
+            work.cancel()
+            returnBorrowed()
+        }
+    }
+    /// A paste-result return deferred itself because a ⌘C was outstanding.
+    private static var waitingForCopy = false
 
     /// Waits (up to ~2 s, longer than a watcher lives) until no Glint ⌘C is outstanding. Actions call this first, so an app's late
     /// answer can never interleave with an action's own clipboard writes or keystrokes.
@@ -199,7 +207,7 @@ enum Clipboard {
                         return true
                     }
                 }
-                await MainActor.run { copyOutstanding = false }
+                await MainActor.run { settleOutstandingCopy() }
             }
             return nil
         }
@@ -209,7 +217,7 @@ enum Clipboard {
                     restore(before)
                     if borrowed != nil { borrowedChangeCount = pb.changeCount }
                 }
-                copyOutstanding = false
+                settleOutstandingCopy()
             }
             if Task.isCancelled { return nil }
             let types = pb.types ?? []

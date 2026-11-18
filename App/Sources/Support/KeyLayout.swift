@@ -9,17 +9,35 @@ import Carbon.HIToolbox
 /// layout. Layouts that switch while ⌘ is held ("Dvorak – QWERTY ⌘") are handled by translating with the
 /// ⌘ modifier state.
 enum KeyLayout {
-    /// Built maps for one input source (main thread only, like every KeySender call).
-    private static var cache: (sourceID: String, plain: [Character: UInt16], command: [Character: UInt16])?
+    struct Maps {
+        var plain: [Character: UInt16] = [:]
+        var shift: [Character: UInt16] = [:]
+        var command: [Character: UInt16] = [:]
+        var commandShift: [Character: UInt16] = [:]
+    }
 
-    /// The key code that types the same character as `usKeyCode` does on a US keyboard.
-    static func translate(_ usKeyCode: UInt16, command: Bool) -> UInt16 {
-        guard let ch = usCharacter(for: usKeyCode) else { return usKeyCode } // Return, arrows, F-keys: physical
+    /// Built maps for one input source (main thread only, like every KeySender call).
+    private static var cache: (sourceID: String, maps: Maps)?
+
+    /// The key (and whether Shift is needed) that types the same character as `usKeyCode` does on a US
+    /// keyboard. German "/" is ⇧7, so `command /` becomes ⌘⇧7.
+    static func translate(_ usKeyCode: UInt16, command: Bool) -> (code: UInt16, needsShift: Bool) {
+        guard let ch = usCharacter(for: usKeyCode) else { return (usKeyCode, false) } // Return, arrows, F-keys
         // Digits stay on the top row: on AZERTY-like layouts they need Shift, and the only other keys typing
         // them are on the numeric keypad, which apps treat as different keys.
-        if ch.isNumber { return usKeyCode }
-        let maps = current()
-        return (command ? maps.command[ch] : maps.plain[ch]) ?? maps.plain[ch] ?? usKeyCode
+        if ch.isNumber { return (usKeyCode, false) }
+        let m = current()
+        if let c = (command ? m.command[ch] : nil) ?? m.plain[ch] { return (c, false) }
+        if let c = (command ? m.commandShift[ch] : nil) ?? m.shift[ch] { return (c, true) }
+        return (usKeyCode, false)
+    }
+
+    /// Label for a physical key code on the current layout ("C" for Dvorak's key 34), for shortcut displays.
+    static func label(forKeyCode code: UInt16) -> String? {
+        guard usCharacter(for: code) != nil else { return nil } // Return, Esc, arrows, F-keys keep their symbols
+        let m = current()
+        guard let ch = m.plain.first(where: { $0.value == code })?.key, !ch.isWhitespace else { return nil }
+        return String(ch).uppercased()
     }
 
     private static let usCharacters: [UInt16: Character] = {
@@ -39,14 +57,16 @@ enum KeyLayout {
 
     /// Maps for the current layout. Checked against the active input source on every call (cheap), so a
     /// layout switch is never missed, even while notifications to Glint are suspended.
-    private static func current() -> (plain: [Character: UInt16], command: [Character: UInt16]) {
-        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue() else { return ([:], [:]) }
+    private static func current() -> Maps {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue() else { return Maps() }
         let id = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
             .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String } ?? ""
-        if let cache, cache.sourceID == id { return (cache.plain, cache.command) }
-        let built = (sourceID: id, plain: build(source, modifiers: 0), command: build(source, modifiers: UInt32(cmdKey >> 8)))
-        cache = built
-        return (built.plain, built.command)
+        if let cache, cache.sourceID == id { return cache.maps }
+        let cmd = UInt32(cmdKey >> 8), sh = UInt32(shiftKey >> 8)
+        let maps = Maps(plain: build(source, modifiers: 0), shift: build(source, modifiers: sh),
+                        command: build(source, modifiers: cmd), commandShift: build(source, modifiers: cmd | sh))
+        cache = (id, maps)
+        return maps
     }
 
     /// Keypad key codes (65–92): never chosen, apps treat them as different keys.

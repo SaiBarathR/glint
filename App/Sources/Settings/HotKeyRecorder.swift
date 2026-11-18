@@ -12,7 +12,17 @@ struct HotKeyRecorder: View {
 
     private var label: String {
         if recorder.isRecording { return "Press shortcut…" }
-        return combo?.description ?? "Record Shortcut"
+        guard let combo else { return "Record Shortcut" }
+        // Label the physical key with the character it types on the current layout.
+        if let key = KeyLayout.label(forKeyCode: combo.keyCode) {
+            var s = ""
+            if combo.modifiers.contains(.control) { s += "⌃" }
+            if combo.modifiers.contains(.option) { s += "⌥" }
+            if combo.modifiers.contains(.shift) { s += "⇧" }
+            if combo.modifiers.contains(.command) { s += "⌘" }
+            return s + key
+        }
+        return combo.description
     }
 
     var body: some View {
