@@ -378,3 +378,14 @@ final class ReviewRoundFourteenTests: XCTestCase {
         XCTAssertEqual(ContentDetector.detect(in: "(2+3)*4").mathResult, "20")
     }
 }
+
+final class ReviewRoundFifteenTests: XCTestCase {
+    func testFormatting() {
+        XCTAssertEqual(ContentDetector.detect(in: "0.3-0.2-0.1").mathResult, "0")
+        XCTAssertEqual(ContentDetector.detect(in: "1-0.9-0.1").mathResult, "0")
+        XCTAssertEqual(ContentDetector.detect(in: "2^64").mathResult, "1.84467440737096e+19")
+        XCTAssertEqual(ContentDetector.detect(in: "0.1+0.2").mathResult, "0.3")
+        XCTAssertEqual(ContentDetector.detect(in: "10/3").mathResult, "3.3333333333")
+        XCTAssertEqual(ContentDetector.detect(in: "999999*1000").mathResult, "999999000")
+    }
+}

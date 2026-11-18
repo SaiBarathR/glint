@@ -43,14 +43,18 @@ public enum Calculator {
     }
 
     public static func format(_ value: Double) -> String {
-        if value == 0 { return "0" } // never "-0"
-        if value == value.rounded(), abs(value) < 1e15 { return String(format: "%.0f", value) }
+        // Doubles are exact only up to 2^53: beyond 1e15 show scientific notation rather than invented digits.
+        if abs(value) >= 1e15 { return String(format: "%.15g", value) }
+        // Round to the shown precision first, so float noise (0.3-0.2-0.1) is 0, never "-0".
+        let rounded = (value * 1e10).rounded() / 1e10
+        if rounded == 0 { return "0" }
+        if rounded == rounded.rounded() { return String(format: "%.0f", rounded) }
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.usesGroupingSeparator = false
         f.maximumFractionDigits = 10
         f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: NSNumber(value: value)) ?? "\(value)"
+        return f.string(from: NSNumber(value: rounded)) ?? "\(rounded)"
     }
 
     private struct Parser {

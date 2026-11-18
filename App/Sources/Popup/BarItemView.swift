@@ -91,7 +91,10 @@ final class BarItemView: NSView {
         }
         if case .nav = item.kind { return max(style.minButtonWidth * 0.75, w + style.hPadding) }
         var total = w + style.hPadding * 2
-        if case .label = item.kind { total = min(total, Self.maxLabelWidth) }
+        switch item.kind {
+        case .label, .button: total = min(total, Self.maxLabelWidth) // long text truncates instead of overflowing
+        default: break
+        }
         return max(style.minButtonWidth, total)
     }
 
