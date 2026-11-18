@@ -76,7 +76,7 @@ final class SelectionMonitor {
         case .leftMouseDown:
             // A click in the menu bar may be Edit ▸ Copy: let it win over a pending late-⌘C restore.
             if let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }), point.y > screen.visibleFrame.maxY {
-                Clipboard.noteUserCopy()
+                Clipboard.noteClickHint()
             }
             delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
             downPoint = point
@@ -120,7 +120,7 @@ final class SelectionMonitor {
             }
             if let trigger { delegate?.selectionMonitor(self, didDetect: trigger, at: point, iBeam: downIBeam) }
         case .rightMouseDown, .otherMouseDown:
-            Clipboard.noteUserCopy() // context menus offer Copy
+            Clipboard.noteClickHint() // context menus offer Copy
             delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
         case .scrollWheel:
             if abs(e.scrollingDeltaY) > 2 || abs(e.scrollingDeltaX) > 2 {

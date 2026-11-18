@@ -19,7 +19,6 @@ enum Clipboard {
     }
 
     static func restore(_ s: Snapshot) {
-        generation &+= 1
         pb.clearContents()
         let items = s.items.map { dict -> NSPasteboardItem in
             let item = NSPasteboardItem()
@@ -27,26 +26,35 @@ enum Clipboard {
             return item
         }
         if !items.isEmpty { pb.writeObjects(items) }
+        ownChangeCount = pb.changeCount
     }
 
     static var string: String? { pb.string(forType: .string) }
 
-    /// Bumped whenever Glint writes the clipboard, an action runs, or the user may have copied (⌘C/⌘X,
-    /// context menu, menu bar). A late-⌘C watcher stops as soon as it moves, so it never undoes a copy.
-    static var generation = 0
-    /// When the user last pressed ⌘C/⌘X or opened a menu that offers Copy.
+    /// The clipboard's change count right after Glint's most recent write, so watchers can tell Glint's own
+    /// writes from an app answering ⌘C.
+    static var ownChangeCount = -1
+    /// Bumped only by the user's own ⌘C / ⌘X key presses: a late-⌘C restore must never undo those.
+    static var userCopyGeneration = 0
+    /// When the user last pressed ⌘C/⌘X, right-clicked or clicked the menu bar (menus offer Copy).
     static var lastUserCopyAt = Date.distantPast
+    static var lastClickHintAt = Date.distantPast
+
     static func noteUserCopy() {
-        generation &+= 1
+        userCopyGeneration &+= 1
         lastUserCopyAt = Date()
     }
-    /// An action is about to run: retire any late-⌘C watcher so it can't undo what the action writes.
-    static func retireWatchers() { generation &+= 1 }
+
+    /// A right-click or menu-bar click: the user *may* copy from a menu shortly.
+    static func noteClickHint() {
+        lastClickHintAt = Date()
+        lastUserCopyAt = lastClickHintAt
+    }
 
     static func setString(_ s: String) {
-        generation &+= 1
         pb.clearContents()
         pb.setString(s, forType: .string)
+        ownChangeCount = pb.changeCount
     }
 
     // MARK: Temporary use (paste-result, paste plain)
@@ -102,43 +110,70 @@ enum Clipboard {
     // MARK: ⌘C fallback
 
     /// True while a ⌘C sent by Glint hasn't been answered (or given up on) yet.
-    private static var copyOutstanding = false
+    private(set) static var copyOutstanding = false
+
+    /// Waits (up to ~2 s, longer than a watcher lives) until no Glint ⌘C is outstanding. Actions call this first, so an app's late
+    /// answer can never interleave with an action's own clipboard writes or keystrokes.
+    static func waitForOutstandingCopy() async {
+        for _ in 0..<50 where await MainActor.run(body: { copyOutstanding }) {
+            await pause(0.04)
+        }
+    }
+
+    /// A sleep that ignores task cancellation (a cancelled `Task.sleep` returns at once and would spin).
+    private static func pause(_ seconds: TimeInterval) async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { c.resume() }
+        }
+    }
+
+    /// Should an app's answer to Glint's ⌘C, arriving now, be undone? Not if the user copied in the meantime:
+    /// a ⌘C/⌘X key, or a change arriving well after a right-click / menu-bar click (a menu's Copy item).
+    private static func shouldRestore(userGen: Int, sentAt: Date) -> Bool {
+        if userCopyGeneration != userGen { return false }
+        if lastClickHintAt > sentAt, Date().timeIntervalSince(lastClickHintAt) > 0.4 { return false }
+        return true
+    }
 
     /// Reads the selection by sending ⌘C and restoring the clipboard afterwards.
     /// Returns (text, html). Nil when nothing was copied, only files were copied, or a fallback isn't safe now.
     static func copySelection(timeout: TimeInterval = 0.35) async -> (String, String?)? {
         // Prepare and send on the main actor in one step. Never send a second ⌘C while one is unanswered
         // (its late answer would be mistaken for ours), never after the capture was cancelled, and never
-        // right after the user copied something themselves.
-        let prepared = await MainActor.run { () -> (Snapshot, Int)? in
+        // right after the user copied (or may be copying) something themselves.
+        let prepared = await MainActor.run { () -> (Snapshot, Int, Date)? in
             guard !Task.isCancelled, !copyOutstanding, Date().timeIntervalSince(lastUserCopyAt) > 0.5 else { return nil }
             flushPendingReturn()
             let before = snapshot()
             KeySender.command(.copy)
             copyOutstanding = true
-            return (before, generation)
+            return (before, userCopyGeneration, Date())
         }
-        guard let (before, gen) = prepared else { return nil }
+        guard let (before, userGen, sentAt) = prepared else { return nil }
 
-        // Poll for the answer. Keep polling even if cancelled, so the clipboard is always settled.
+        // Poll for the answer (even if cancelled, so the clipboard always settles).
         let deadline = Date().addingTimeInterval(timeout)
         var changed = false
         while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            await pause(0.02)
             if await MainActor.run(body: { pb.changeCount != before.changeCount }) { changed = true; break }
         }
         guard changed else {
-            // The app may still answer late: keep watching and put the user's clipboard back if it does,
-            // unless the user (or an action) touched the clipboard first.
+            // The app may still answer late. Keep watching until it does or 1.5 s pass; Glint's own writes in the
+            // meantime become the new baseline to return to.
             Task.detached {
-                let lateDeadline = Date().addingTimeInterval(1.5)
+                let lateDeadline = sentAt.addingTimeInterval(1.85)
+                var baseline = before
                 var settled = false
                 while Date() < lateDeadline, !settled {
-                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    await pause(0.05)
                     settled = await MainActor.run { () -> Bool in
-                        if generation != gen { return true }
-                        guard pb.changeCount != before.changeCount else { return false }
-                        restore(before)
+                        guard pb.changeCount != baseline.changeCount else { return false }
+                        if pb.changeCount == ownChangeCount {
+                            baseline = snapshot()
+                            return false
+                        }
+                        if shouldRestore(userGen: userGen, sentAt: sentAt) { restore(baseline) }
                         return true
                     }
                 }
@@ -148,8 +183,7 @@ enum Clipboard {
         }
         return await MainActor.run { () -> (String, String?)? in
             defer {
-                // Put the user's clipboard back, unless they copied something themselves in the meantime.
-                if generation == gen { restore(before) }
+                if shouldRestore(userGen: userGen, sentAt: sentAt) { restore(before) }
                 copyOutstanding = false
             }
             if Task.isCancelled { return nil }

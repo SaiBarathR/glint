@@ -13,9 +13,16 @@ final class ActionPerformer: ActionHost {
 
     private(set) var log: [String] = []
 
-    func perform(_ action: BarAction, flags: NSEvent.ModifierFlags) {
-        // Any action may write the clipboard (Copy, Cut, results): an older late-⌘C watcher must not undo it.
-        Clipboard.retireWatchers()
+    func perform(_ action: BarAction, flags: NSEvent.ModifierFlags, waitedForClipboard: Bool = false) {
+        // If an app hasn't answered Glint's ⌘C yet, let that settle first: its late answer must not land in the
+        // middle of this action's clipboard writes or keystrokes.
+        if Clipboard.copyOutstanding, !waitedForClipboard {
+            Task { @MainActor in
+                await Clipboard.waitForOutstandingCopy()
+                self.perform(action, flags: flags, waitedForClipboard: true)
+            }
+            return
+        }
         let mods = ModifierState(rawValue: Int(flags.rawValue) & (ModifierState.shift.rawValue | ModifierState.control.rawValue
                                                                   | ModifierState.option.rawValue | ModifierState.command.rawValue))
         guard let selection else { return }
