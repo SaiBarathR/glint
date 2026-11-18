@@ -49,7 +49,7 @@ public enum Calculator {
             return value == 0 ? "0" : String(format: "%.0f", value)
         }
         // Beyond that (or huge fractions) only ~15 significant digits are real.
-        if abs(value) >= 1e15 { return String(format: "%.15g", value) }
+        if abs(value) > 9_007_199_254_740_992 { return String(format: "%.15g", value) }
         // Up to 10 decimals, but never more than 15 significant digits (427452.59, not 427452.5900000001).
         let integerDigits = abs(value) < 1 ? 1 : Int(floor(log10(abs(value)))) + 1
         let places = max(0, min(10, 15 - integerDigits))

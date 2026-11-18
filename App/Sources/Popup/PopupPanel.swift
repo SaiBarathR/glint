@@ -129,7 +129,8 @@ final class HoverLabelPanel: NSPanel {
         box.wantsLayer = true
         box.layer?.cornerRadius = 5
         field.font = .systemFont(ofSize: 11.5, weight: .medium)
-        field.lineBreakMode = .byTruncatingTail
+        field.lineBreakMode = .byWordWrapping
+        field.maximumNumberOfLines = 12
         box.addSubview(field)
         contentView = box
     }
@@ -141,9 +142,13 @@ final class HoverLabelPanel: NSPanel {
         box.layer?.backgroundColor = style.background.cgColor
         box.layer?.borderColor = style.border.cgColor
         box.layer?.borderWidth = 1
-        field.sizeToFit()
-        let w = min(ceil(field.frame.width) + 16, 560), h: CGFloat = 22
-        field.frame = NSRect(x: 8, y: (h - field.frame.height) / 2, width: w - 16, height: field.frame.height)
+        // One line when it fits, otherwise wrapped at 560 pt (long results, multi-line messages).
+        let maxText: CGFloat = 544
+        field.preferredMaxLayoutWidth = maxText
+        let size = field.sizeThatFits(NSSize(width: maxText, height: .greatestFiniteMagnitude))
+        let w = min(ceil(size.width), maxText) + 16
+        let h = max(22, ceil(size.height) + 8)
+        field.frame = NSRect(x: 8, y: (h - ceil(size.height)) / 2, width: w - 16, height: ceil(size.height))
         var origin = NSPoint(x: rect.midX - w / 2, y: preferBelow ? rect.minY - h - 4 : rect.maxY + 4)
         if let screen = NSScreen.screens.first(where: { $0.frame.intersects(rect) }) ?? NSScreen.main {
             let vf = screen.visibleFrame

@@ -419,3 +419,39 @@ final class ReviewRoundSixteenTests: XCTestCase {
         XCTAssertEqual(m.actions.map(\.title), ["A"])
     }
 }
+
+final class ReviewRoundSeventeenTests: XCTestCase {
+    func testNestedAndDottedRequire() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let bundle = dir.appendingPathComponent("Nest.glintext")
+        try fm.createDirectory(at: bundle.appendingPathComponent("lib"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        func w(_ p: String, _ s: String) throws { try s.write(to: bundle.appendingPathComponent(p), atomically: true, encoding: .utf8) }
+        try w("lib/util.js", "var d = require('./deep'); var h = require('../helper.v2'); exports.go = function(s) { return d.up(h.bang(s)); };")
+        try w("lib/deep.js", "exports.up = function(s) { return s.toUpperCase(); };")
+        try w("helper.v2.js", "exports.bang = function(s) { return s + '!'; };")
+        try w("data.json", "{\"suffix\": \"?\"}")
+        try w("Config.js", """
+        const u = require('./lib/util'); const data = require('./data.json');
+        module.exports = { name: 'Nest', actions: [{ title: 'Go', code: function(i) { return u.go(i.text) + data.suffix; } }] };
+        """)
+        let m = try ExtensionLoader.loadBundle(at: bundle)
+        XCTAssertEqual(m.actions.map(\.title), ["Go"])
+        let exp = expectation(description: "run")
+        Task {
+            let out = await ExtensionRuntime(host: nil).perform(m.actions[0], of: m, input: ActionInput(text: "hi"),
+                                                                context: SelectionContext(text: "hi"), modifiers: [], options: [:])
+            XCTAssertEqual(out, .result("HI!?"))
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 10)
+    }
+
+    func testLargeNonIntegersKeepDigits() {
+        // Within 2^53 the integer digits are kept (not "1e+15"); a 16th significant digit isn't shown.
+        XCTAssertEqual(Calculator.format(2000000000000001.0 / 2), "1000000000000000")
+        XCTAssertEqual(Calculator.format(3000000000000001.0 / 2), "1500000000000000")
+        XCTAssertEqual(Calculator.format(1e13 + 0.3), "10000000000000.3")
+    }
+}

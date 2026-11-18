@@ -13,6 +13,8 @@ final class PopupController {
     private var page = 0
     private var pages: [[Int]] = []
     private var dismissTimer: Timer?
+    /// Set while a self-dismissing result is shown, so hovering can pause it.
+    private var resultDismissDelay: TimeInterval?
     private var shownAt = Date.distantPast
     private(set) var isVisible = false
     /// Called when an action button is clicked.
@@ -48,7 +50,11 @@ final class PopupController {
             }
         }
         render(items: [BarItemView(item: item, style: style)], style: style, animate: !isVisible)
-        if !preview { scheduleDismiss(after: max(2.5, min(8, Double(text.count) / 12))) }
+        if !preview {
+            let delay = max(2.5, min(8, Double(text.count) / 12))
+            scheduleDismiss(after: delay)
+            resultDismissDelay = delay
+        }
     }
 
     func showStatus(success: Bool) {
@@ -176,6 +182,7 @@ final class PopupController {
     private func render(items: [BarItemView], style: BarStyle, animate: Bool) {
         // A new state replaces the old one, including its auto-dismiss (callers reschedule their own).
         dismissTimer?.invalidate()
+        resultDismissDelay = nil
         hoverLabel.orderOut(nil)
         if anchor == .zero {
             let m = NSEvent.mouseLocation
@@ -231,7 +238,11 @@ final class PopupController {
     private func hoverChanged(_ v: BarItemView, inside: Bool, style: BarStyle) {
         guard Preferences.shared.showHoverLabels else { return }
         // Show for icon-only items, truncated titles, and hints that differ from the visible text.
-        guard inside, let tip = v.item.tooltip, v.item.handler != nil,
+        // Keep a result on screen while the pointer is over it; resume the countdown when it leaves.
+        if let pending = resultDismissDelay {
+            if inside { dismissTimer?.invalidate() } else { scheduleDismiss(after: min(pending, 2.5)) }
+        }
+        guard inside, let tip = v.item.tooltip, v.item.handler != nil || v.isTruncated,
               !v.showsTitle || v.isTruncated || tip != v.visibleTitle else {
             hoverLabel.orderOut(nil)
             return

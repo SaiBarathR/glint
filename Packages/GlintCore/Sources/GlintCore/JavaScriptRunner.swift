@@ -65,14 +65,19 @@ public enum JavaScriptRunner {
     };
     function setTimeout(fn, ms) { __native.setTimeout(fn, ms || 0); return 0; }
     function sleep(ms) { return util.sleep(ms); }
-    function require(path) {
-      if (path === 'axios') { return __axios; }
-      var src = __native.readModule(String(path));
-      if (src === null || src === undefined) { throw new Error('Cannot find module ' + path); }
-      var m = { exports: {} };
-      (new Function('module', 'exports', 'require', src))(m, m.exports, require);
-      return m.exports;
+    // Each module gets a require() that resolves relative to its own folder (inside the extension).
+    function __makeRequire(baseDir) {
+      return function require(path) {
+        if (path === 'axios') { return __axios; }
+        var r = __native.readModule(String(path), baseDir);
+        if (r === null || r === undefined) { throw new Error('Cannot find module ' + path); }
+        if (r.json) { return JSON.parse(r.source); }
+        var m = { exports: {} };
+        (new Function('module', 'exports', 'require', r.source))(m, m.exports, __makeRequire(r.dir));
+        return m.exports;
+      };
     }
+    var require = __makeRequire('');
     function fetch(url, init) {
       init = init || {};
       return __native.fetch(String(url), String(init.method || 'GET'), init.headers || {},
@@ -214,19 +219,29 @@ public enum JavaScriptRunner {
             host?.currentClipboardText() ?? env?.context.clipboardText ?? ""
         }
         let bundleURL = env?.bundleURL ?? explicitBundleURL
-        let readModule: @convention(block) (String) -> JSValue? = { path in
-            guard let bundleURL else { return JSValue(nullIn: JSContext.current()) }
-            var p = path
-            if p.hasPrefix("./") { p.removeFirst(2) }
-            var url = bundleURL.appendingPathComponent(p)
-            if url.pathExtension.isEmpty { url.appendPathExtension("js") }
+        /// Resolves `path` relative to `baseDir` (a folder inside the bundle) and returns
+        /// `{ source, dir, json }`, or null when missing or outside the extension's folder.
+        let readModule: @convention(block) (String, String) -> JSValue? = { path, baseDir in
+            let null = JSValue(nullIn: JSContext.current())
+            guard let bundleURL else { return null }
+            let rootURL = bundleURL.standardizedFileURL.resolvingSymlinksInPath()
+            let root = rootURL.path + "/"
+            let base = baseDir.isEmpty ? bundleURL : bundleURL.appendingPathComponent(baseDir, isDirectory: true)
+            let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : base.appendingPathComponent(path)
+            // Try the name as given, then with .js (so "lib", "lib.min" and "lib.js" all work).
+            let fm = FileManager.default
+            let candidates = [url, url.appendingPathExtension("js")]
+            guard let found = candidates.first(where: { c in
+                var isDir: ObjCBool = false
+                return fm.fileExists(atPath: c.path, isDirectory: &isDir) && !isDir.boolValue
+            }) else { return null }
+            let resolved = found.standardizedFileURL.resolvingSymlinksInPath()
             // Modules may only come from inside the extension's own folder.
-            let root = bundleURL.standardizedFileURL.resolvingSymlinksInPath().path + "/"
-            guard url.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix(root) else {
-                return JSValue(nullIn: JSContext.current())
-            }
-            guard let src = try? String(contentsOf: url, encoding: .utf8) else { return JSValue(nullIn: JSContext.current()) }
-            return JSValue(object: src, in: JSContext.current())
+            guard resolved.path.hasPrefix(root), let src = try? String(contentsOf: resolved, encoding: .utf8) else { return null }
+            let dir = String(resolved.deletingLastPathComponent().path.dropFirst(rootURL.path.count))
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return JSValue(object: ["source": src, "dir": dir, "json": resolved.pathExtension.lowercased() == "json"],
+                           in: JSContext.current())
         }
         let fetch: @convention(block) (String, String, JSValue, JSValue) -> JSValue = { urlString, method, headers, body in
             let ctx = JSContext.current()!
