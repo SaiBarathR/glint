@@ -85,6 +85,12 @@ final class BarItemView: NSView {
                                   attributes: [.font: style.font, .foregroundColor: color, .paragraphStyle: para])
     }
 
+    /// A result whose text has several lines (shown joined with ⏎ on the bar).
+    var isMultilineLabel: Bool {
+        if case .label(let t) = item.kind { return t.contains("\n") }
+        return false
+    }
+
     /// The title doesn't fit and is shown truncated.
     var isTruncated: Bool { naturalWidth > Self.maxLabelWidth }
 

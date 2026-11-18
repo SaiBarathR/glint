@@ -204,7 +204,15 @@ struct ActionsPane: View {
                     bundles = unzipped!.bundles
                 }
                 defer { unzipped?.cleanUp() }
-                for url in bundles { lastInstalled = try registry.install(bundleAt: url).identifier }
+                // One bad extension in a zip doesn't stop the others; each failure is named.
+                for url in bundles {
+                    do { lastInstalled = try registry.install(bundleAt: url).identifier }
+                    catch {
+                        let label = bundles.count > 1 ? "\(original.lastPathComponent) › \(url.lastPathComponent)"
+                                                      : original.lastPathComponent
+                        failures.append("“\(label)”: \(error.localizedDescription)")
+                    }
+                }
             } catch {
                 // Name the file the user picked, not a temporary folder.
                 failures.append("“\(original.lastPathComponent)”: \(error.localizedDescription)")

@@ -250,14 +250,14 @@ final class PopupController {
         }
         guard Preferences.shared.showHoverLabels else { return }
         // Show for icon-only items, truncated titles, and hints that differ from the visible text.
-        guard inside, let tip = v.item.tooltip, v.item.handler != nil || v.isTruncated,
+        guard inside, let tip = v.item.tooltip, v.item.handler != nil || v.isTruncated || v.isMultilineLabel,
               !v.showsTitle || v.isTruncated || tip != v.visibleTitle else {
             hoverLabel.orderOut(nil)
             return
         }
         // A cut-off or multi-line result shows its full text, after the hint when there is one.
         var shown = tip
-        if case .label(let full) = v.item.kind, v.isTruncated || full.contains("\n") {
+        if case .label(let full) = v.item.kind, v.isTruncated || v.isMultilineLabel {
             shown = tip == full ? full : tip + "\n\n" + full
         }
         let rectInWindow = v.convert(v.bounds, to: nil)

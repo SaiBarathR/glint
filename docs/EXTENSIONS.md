@@ -599,9 +599,10 @@ prefixes. When an action has no icon, its title's initials are used.
 
 - **Install a snippet**: select its text in any app and click **Install Extension**. It's saved as
   `~/Library/Application Support/Glint/Extensions/<identifier>.glintext/Snippet.txt`.
-- **Install a bundle**: open a `.glintext` or `.popclipext` folder, or a zipped `.glintextz` / `.popclipextz`
-  / `.zip`, with Glint (double-click or drop it on the app), or use **Install from File…** in Settings →
-  Actions. It's copied into the same Extensions folder; a zip holding several extensions installs each.
+- **Install a bundle**: open a `.glintext` / `.popclipext` folder or a zipped `.glintextz` / `.popclipextz`
+  with Glint (double-click or drop it on the app), or use **Install from File…** in Settings → Actions, which
+  also accepts a plain `.zip`. It's copied into the same Extensions folder; a zip holding several extensions
+  installs each. A flat zip (config at its root) is named after the extension, so re-downloads update it.
 - **Develop in place**: edit files in `~/Library/Application Support/Glint/Extensions` and reload
   extensions with **Reload Extensions** in Settings → Actions.
 - **Identifiers**: give every extension an `identifier`. Without one, a snippet gets `snippet.<name-slug>`,

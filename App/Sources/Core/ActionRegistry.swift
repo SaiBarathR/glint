@@ -246,7 +246,7 @@ final class ActionRegistry: ObservableObject {
     /// Copies an extension package (.glintext / .popclipext folder) into the user directory.
     @discardableResult
     func install(bundleAt url: URL) throws -> ExtensionManifest {
-        _ = try ExtensionLoader.loadBundle(at: url) // validate before touching anything
+        _ = try ExtensionLoader.load(folder: url) // validate before touching anything
         let fm = FileManager.default
         let dest = Self.userExtensionsDirectory.appendingPathComponent(url.lastPathComponent, isDirectory: true)
         if dest.standardizedFileURL.resolvingSymlinksInPath() != url.standardizedFileURL.resolvingSymlinksInPath() {
@@ -260,7 +260,7 @@ final class ActionRegistry: ObservableObject {
                 try fm.moveItem(at: staging, to: dest)
             }
         }
-        let installed = try ExtensionLoader.loadBundle(at: dest)
+        let installed = try ExtensionLoader.load(folder: dest)
         finishInstall(installed)
         return installed
     }

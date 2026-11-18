@@ -79,18 +79,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
                 bundles = unzipped!.bundles
             }
             defer { unzipped?.cleanUp() }
+            // Each extension is offered separately; one that fails doesn't stop the others.
+            var failures: [String] = []
             for url in bundles {
-                let manifest = try ExtensionLoader.loadBundle(at: url)
-                let alert = NSAlert()
-                alert.messageText = "Install “\(manifest.name)”?"
-                let kinds = manifest.actions.map(\.title).joined(separator: ", ")
-                alert.informativeText = "\(manifest.description ?? "")\n\nActions: \(kinds)\n\nOnly install extensions from people you trust: they can run scripts on your Mac."
-                alert.addButton(withTitle: "Install")
-                alert.addButton(withTitle: "Cancel")
-                if alert.runModal() == .alertFirstButtonReturn {
-                    try ActionRegistry.shared.install(bundleAt: url)
-                    SettingsWindowController.shared.show(extensionKey: manifest.identifier)
+                do {
+                    let manifest = try ExtensionLoader.load(folder: url)
+                    let alert = NSAlert()
+                    alert.messageText = "Install “\(manifest.name)”?"
+                    let kinds = manifest.actions.map(\.title).joined(separator: ", ")
+                    alert.informativeText = "\(manifest.description ?? "")\n\nActions: \(kinds)\n\nOnly install extensions from people you trust: they can run scripts on your Mac."
+                    alert.addButton(withTitle: "Install")
+                    alert.addButton(withTitle: "Cancel")
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        try ActionRegistry.shared.install(bundleAt: url)
+                        SettingsWindowController.shared.show(extensionKey: manifest.identifier)
+                    }
+                } catch {
+                    failures.append("“\(url.lastPathComponent)”: \(error.localizedDescription)")
                 }
+            }
+            if !failures.isEmpty {
+                let alert = NSAlert()
+                alert.messageText = bundles.count == 1 ? "Couldn't install “\(original.lastPathComponent)”"
+                                                       : "Some extensions in “\(original.lastPathComponent)” couldn't be installed"
+                alert.informativeText = failures.joined(separator: "\n\n")
+                alert.runModal()
             }
         } catch {
             let alert = NSAlert()
@@ -135,10 +148,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             try? fm.removeItem(at: temp)
             throw UnzipError(message: "Couldn't unzip “\(zip.lastPathComponent)”. The file may be damaged.")
         }
-        let found = findBundles(in: root, depth: 0)
+        var found = findBundles(in: root, depth: 0)
         guard !found.isEmpty else {
             try? fm.removeItem(at: temp)
             throw UnzipError(message: "“\(zip.lastPathComponent)” doesn't contain a Glint or PopClip extension.")
+        }
+        // A flat zip's folder (and so its derived id) comes from the extension itself, not the download's file
+        // name, so "Foo (1).zip" updates the same extension as "Foo.zip".
+        if found == [root], let m = try? ExtensionLoader.load(folder: root) {
+            let derived = m.identifier.hasPrefix("bundle.") || m.identifier.hasPrefix("snippet.")
+            let raw = derived ? m.name : m.identifier
+            let slug = raw.lowercased().map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? $0 : "-" }
+            let name = String(slug).split(separator: "-").joined(separator: "-")
+            let target = temp.appendingPathComponent((name.isEmpty ? "extension" : name) + ".glintext", isDirectory: true)
+            if target != root, (try? fm.moveItem(at: root, to: target)) != nil { found = [target] }
         }
         return Unzipped(bundles: found, tempDir: temp)
     }
