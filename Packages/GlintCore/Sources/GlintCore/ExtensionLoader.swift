@@ -84,6 +84,7 @@ public enum ExtensionLoader {
             if ac.bool("dynamic") == true {
                 actions.append(ActionSpec(id: "dynamic", title: name, icon: icon, kind: .jsModuleAction(index: -1),
                                           requirements: defaults.requirements ?? ["text"],
+                                          after: AfterAction(config: defaults.after),
                                           requiredApps: defaults.apps, excludedApps: defaults.excludedApps,
                                           stayVisible: defaults.stayVisible ?? false,
                                           captureHTML: defaults.captureHTML ?? false))
@@ -218,7 +219,7 @@ public enum ExtensionLoader {
         guard let items = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return ([], []) }
         var exts: [ExtensionManifest] = []
         var errors: [(URL, Error)] = []
-        for item in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        for item in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) where !item.lastPathComponent.hasPrefix(".") {
             var isDir: ObjCBool = false
             if fm.fileExists(atPath: item.path, isDirectory: &isDir), isDir.boolValue {
                 do { exts.append(try load(folder: item, isBuiltIn: isBuiltIn)) } catch { errors.append((item, error)) }

@@ -400,9 +400,11 @@ A shell action receives:
 | `GLINT_EXTENSION_IDENTIFIER`, `GLINT_EXTENSION_PATH` | This extension's ID and bundle folder. |
 | `GLINT_TEXT_TRUNCATED` | `1` when the input was too large for the environment (see below), otherwise `0`. |
 
-Text values larger than 64 KB (`GLINT_TEXT`, `GLINT_FULL_TEXT`, `GLINT_MARKDOWN`, `GLINT_HTML`) are left
-empty so the environment stays under macOS's size limit. The full input text is always on **stdin**, so
-scripts that may receive large selections should read stdin.
+To keep the environment under macOS's size limit, any single value larger than 64 KB is left empty, and the
+whole environment is kept under about 384 KB: when it would be larger, values are emptied in this order until
+it fits: `GLINT_HTML`, `GLINT_MARKDOWN`, `GLINT_FULL_TEXT`, regex groups, `GLINT_URLS`, option values and,
+last, `GLINT_TEXT`. The full input text is always on **stdin**, so scripts that may receive large selections
+should read stdin.
 
 - **PATH** is prefixed with `/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`.
   `LANG` defaults to `en_US.UTF-8`.

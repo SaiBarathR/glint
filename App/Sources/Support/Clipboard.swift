@@ -95,6 +95,7 @@ enum Clipboard {
     static func copySelection(timeout: TimeInterval = 0.35) async -> (String, String?)? {
         let before = await MainActor.run { () -> Snapshot in
             flushPendingReturn()
+            generation &+= 1 // retire any watcher from an earlier capture
             return snapshot()
         }
         let gen = await MainActor.run { () -> Int in

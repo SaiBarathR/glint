@@ -8,6 +8,18 @@ struct CapturedSelection {
     var anchor: CGRect
     /// The bar was summoned without a selection (long-press paste).
     var isPasteOnly: Bool
+    /// The app and text element the selection lives in, to check later that a paste still lands there.
+    var pid: pid_t = 0
+    var element: AXUIElement?
+
+    /// True while the same app is frontmost and the same element still has keyboard focus.
+    func isStillFocused() -> Bool {
+        guard pid != 0 else { return true }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return false }
+        guard let element else { return true }
+        guard let now = AX.focusedElement() else { return true }
+        return CFEqual(now, element)
+    }
 }
 
 enum SelectionReader {
@@ -92,6 +104,6 @@ enum SelectionReader {
             let m = NSEvent.mouseLocation
             anchor = CGRect(x: m.x - 1, y: m.y - 8, width: 2, height: 16)
         }
-        return CapturedSelection(context: context, anchor: anchor, isPasteOnly: pasteOnly)
+        return CapturedSelection(context: context, anchor: anchor, isPasteOnly: pasteOnly, pid: pid, element: element)
     }
 }

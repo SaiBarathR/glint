@@ -181,3 +181,59 @@ final class ReviewRoundTwoTests: XCTestCase {
         XCTAssertEqual(sink.copied, ["late"])
     }
 }
+
+final class ReviewRoundThreeTests: XCTestCase {
+    func testBudgetKeepsTextAndDropsDuplicatesFirst() {
+        let text = String(repeating: "a", count: 60_000)
+        let m = ExtensionManifest(identifier: "t", name: "T", actions: [])
+        for _ in 0..<10 {
+            let env = ExtensionRuntime.environment(manifest: m,
+                                                   input: ActionInput(text: text, regexGroups: [text, text],
+                                                                      html: String(repeating: "h", count: 50_000)),
+                                                   context: SelectionContext(text: text), modifiers: [], options: [:])
+            XCTAssertEqual(env["GLINT_TEXT"]?.count, 60_000)
+            XCTAssertEqual(env["GLINT_TEXT_TRUNCATED"], "0")
+            XCTAssertEqual(env["GLINT_HTML"], "")
+        }
+    }
+
+    func testDynamicActionsInheritModuleAfter() throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        // #glint
+        // name: Dyn
+        // language: javascript
+        // module: true
+        exports.after = 'paste-result';
+        exports.stayVisible = true;
+        exports.actions = function(input) { return [{ title: 'A', code: function(i) { return 'R:' + i.text; } }]; };
+        """)
+        let ctx = SelectionContext(text: "hello", canPaste: true)
+        let dyn = ExtensionRuntime(host: nil).populateDynamic(m, input: ActionInput(text: "hello"), context: ctx, modifiers: [], options: [:])
+        XCTAssertEqual(dyn.first?.after, .pasteResult)
+        XCTAssertEqual(dyn.first?.stayVisible, true)
+    }
+
+    func testHiddenStagingFoldersAreIgnored() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let staging = dir.appendingPathComponent(".staging-123")
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        try "name: Foo\nurl: https://x/***".write(to: staging.appendingPathComponent("Config.yaml"), atomically: true, encoding: .utf8)
+        XCTAssertTrue(ExtensionLoader.loadAll(in: dir).extensions.isEmpty)
+    }
+
+    func testTimersStopAtTheDeadline() async throws {
+        final class Counter: MockHost { var n = 0; override func copyText(_ text: String) { n += 1 } }
+        let host = Counter()
+        let env = JavaScriptRunner.Environment(input: ActionInput(text: "a"), context: SelectionContext(text: "a"),
+                                               modifiers: [], options: [:], extensionID: "t", bundleURL: nil)
+        _ = await JavaScriptRunner.run(.inline("function tick() { glint.copyText('x'); setTimeout(tick, 100); } tick();"),
+                                       env: env, host: host, timeout: 1)
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+        let afterDeadline = host.n
+        try await Task.sleep(nanoseconds: 600_000_000)
+        XCTAssertEqual(host.n, afterDeadline, "timer kept firing after the deadline")
+        XCTAssertLessThan(afterDeadline, 15)
+    }
+}

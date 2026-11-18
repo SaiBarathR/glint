@@ -196,9 +196,11 @@ public enum JavaScriptRunner {
             Thread.sleep(forTimeInterval: min(min(ms, 10_000) / 1000, remaining))
         }
         let setTimeoutFn: @convention(block) (JSValue, Double) -> Void = { fn, ms in
-            guard !sandboxed else { return }
+            // Timers obey the same wall-clock deadline as the action: nothing keeps running afterwards.
+            guard !sandboxed, Date().addingTimeInterval(ms / 1000) < deadline else { return }
             // Keep the host alive until the callback has run: it may call glint.* after the action returned.
             DispatchQueue.global().asyncAfter(deadline: .now() + ms / 1000) {
+                guard Date() < deadline else { return }
                 withExtendedLifetime(host) { _ = fn.call(withArguments: []) }
             }
         }

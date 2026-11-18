@@ -252,6 +252,7 @@ final class ActionRegistry: ObservableObject {
         if dest.standardizedFileURL.resolvingSymlinksInPath() != url.standardizedFileURL.resolvingSymlinksInPath() {
             // Copy beside the destination first, then swap, so a failed copy never loses the installed version.
             let staging = Self.userExtensionsDirectory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
+            defer { try? fm.removeItem(at: staging) } // gone after a successful swap; cleans up after a failure
             try fm.copyItem(at: url, to: staging)
             if fm.fileExists(atPath: dest.path) {
                 _ = try fm.replaceItemAt(dest, withItemAt: staging)

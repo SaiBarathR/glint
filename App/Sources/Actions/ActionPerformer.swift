@@ -10,8 +10,7 @@ final class ActionPerformer: ActionHost {
     var selection: CapturedSelection? { didSet { session &+= 1 } }
     private(set) var session = 0
 
-    /// The user moved on (clicked, typed, switched apps): results of running actions must not land anymore.
-    func endSession() { session &+= 1 }
+
     private(set) var log: [String] = []
 
     func perform(_ action: BarAction, flags: NSEvent.ModifierFlags) {
@@ -26,7 +25,7 @@ final class ActionPerformer: ActionHost {
             let options = prefs.optionValues(for: manifest)
             // Results are tied to this selection: if the user has moved on to another one by the time a slow
             // action finishes, its UI updates are dropped and a paste becomes a copy.
-            let host = SessionHost(performer: self, session: session)
+            let host = SessionHost(performer: self, session: session, selection: selection)
             Task {
                 var input = input
                 var context = selection.context
@@ -47,6 +46,8 @@ final class ActionPerformer: ActionHost {
     /// Runs an entry's first applicable action directly (per-action hotkeys).
     func performFirstAction(of entryKey: String, selection: CapturedSelection) {
         self.selection = selection
+        // Results, ✓ and choices from a hotkey appear at this selection, not where the last bar was.
+        popup.setAnchor(selection.anchor)
         let actions = ActionBuilder.actions(for: selection).filter { $0.entryKey == entryKey }
         guard let first = actions.first else { NSSound.beep(); return }
         perform(first, flags: [])
@@ -241,12 +242,18 @@ final class ActionPerformer: ActionHost {
 
 
 /// Forwards an action's host calls to the performer while its selection is still the current one.
+/// - UI (results, ✓) is dropped once a newer selection has been shown.
+/// - Input (paste, key presses) only goes through while the original app and text field still have focus;
+///   otherwise a paste becomes a copy, so a slow result never lands somewhere the user didn't intend.
+///   This is decided when the result arrives, so an action's own dialog doesn't count as "moving on".
 final class SessionHost: ActionHost {
     private let performer: ActionPerformer
     private let session: Int
-    init(performer: ActionPerformer, session: Int) {
+    private let selection: CapturedSelection
+    init(performer: ActionPerformer, session: Int, selection: CapturedSelection) {
         self.performer = performer
         self.session = session
+        self.selection = selection
     }
 
     private var isCurrent: Bool {
@@ -254,15 +261,17 @@ final class SessionHost: ActionHost {
         return DispatchQueue.main.sync { performer.session == session }
     }
 
+    private var canDeliverInput: Bool { isCurrent && selection.isStillFocused() }
+
     func pasteText(_ text: String, restoreClipboard: Bool) {
-        if isCurrent { performer.pasteText(text, restoreClipboard: restoreClipboard) } else { performer.copyText(text) }
+        if canDeliverInput { performer.pasteText(text, restoreClipboard: restoreClipboard) } else { performer.copyText(text) }
     }
     func copyText(_ text: String) { performer.copyText(text) }
     func openURL(_ url: URL, background: Bool, appBundleID: String?) {
         performer.openURL(url, background: background, appBundleID: appBundleID)
     }
-    func pressKey(_ combo: KeyCombo) { if isCurrent { performer.pressKey(combo) } }
-    func performCommand(_ command: StandardCommand) { if isCurrent { performer.performCommand(command) } }
+    func pressKey(_ combo: KeyCombo) { if canDeliverInput { performer.pressKey(combo) } }
+    func performCommand(_ command: StandardCommand) { if canDeliverInput { performer.performCommand(command) } }
     func performService(_ name: String, text: String) -> Bool { performer.performService(name, text: text) }
     func showText(_ text: String, preview: Bool) { if isCurrent { performer.showText(text, preview: preview) } }
     func showStatus(success: Bool) { if isCurrent { performer.showStatus(success: success) } }

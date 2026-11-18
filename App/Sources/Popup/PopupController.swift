@@ -22,6 +22,11 @@ final class PopupController {
 
     // MARK: Showing
 
+    /// Where results and status appear when no bar is showing (e.g. after a per-action hotkey).
+    func setAnchor(_ rect: CGRect) {
+        if !isVisible { anchor = rect }
+    }
+
     func show(actions: [BarAction], anchor: CGRect) {
         guard !actions.isEmpty else { return }
         dismissTimer?.invalidate()
@@ -34,7 +39,6 @@ final class PopupController {
     }
 
     func showResult(_ text: String, preview: Bool) {
-        guard isVisible || anchor != .zero else { return }
         let style = BarStyle.current()
         var item = BarItem(kind: .label(text), tooltip: preview ? "Click to copy" : nil)
         if preview {
@@ -171,6 +175,10 @@ final class PopupController {
 
     private func render(items: [BarItemView], style: BarStyle, animate: Bool) {
         hoverLabel.orderOut(nil)
+        if anchor == .zero {
+            let m = NSEvent.mouseLocation
+            anchor = CGRect(x: m.x - 1, y: m.y - 8, width: 2, height: 16)
+        }
         let view = BarContentView(style: style)
         view.setItems(items)
         for item in items {

@@ -142,13 +142,17 @@ public final class ExtensionRuntime {
         for (k, v) in options {
             base["OPTION_" + k.uppercased().map { $0.isLetter || $0.isNumber ? $0 : "_" }.map(String.init).joined()] = capped(v)
         }
-        // Overall budget (each value is exported twice): blank the largest values until it fits.
+        // Overall budget (each value is exported twice). Duplicates and extras are dropped first, in a fixed
+        // order, so GLINT_TEXT survives whenever it fits on its own.
         let budget = 384 * 1024
-        var total = base.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count + 16 } * 2
-        for (k, v) in base.sorted(by: { $0.value.utf8.count > $1.value.utf8.count }) where total > budget {
-            total -= v.utf8.count * 2
-            base[k] = ""
-            if k == "TEXT" { base["TEXT_TRUNCATED"] = "1" }
+        func total() -> Int { base.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count + 16 } * 2 }
+        let regexKeys = base.keys.filter { $0.hasPrefix("REGEX_GROUP_") }.sorted { $0.count != $1.count ? $0.count > $1.count : $0 > $1 }
+        let optionKeys = base.keys.filter { $0.hasPrefix("OPTION_") }.sorted()
+        let order = ["HTML", "MARKDOWN", "FULL_TEXT"] + regexKeys + ["URLS"] + optionKeys + ["TEXT"]
+        for key in order where total() > budget {
+            guard let v = base[key], !v.isEmpty else { continue }
+            base[key] = ""
+            if key == "TEXT" { base["TEXT_TRUNCATED"] = "1" }
         }
         var env: [String: String] = [:]
         for (k, v) in base {
@@ -191,10 +195,15 @@ public final class ExtensionRuntime {
         let env = JavaScriptRunner.Environment(input: input, context: context, modifiers: modifiers, options: options,
                                                optionSpecs: manifest.options, extensionID: manifest.identifier,
                                                bundleURL: manifest.bundleURL)
+        // The placeholder carries the module-level settings that every dynamic action inherits.
+        let parent = manifest.actions.first { $0.kind == .jsModuleAction(index: -1) }
         return JavaScriptRunner.populate(moduleSource: source, env: env).enumerated().map { i, d in
             let c = ConfigDict(d)
             return ActionSpec(id: "dyn\(i)", title: c.string("title") ?? manifest.name, icon: c.string("icon") ?? manifest.icon,
-                              kind: .jsModuleAction(index: i), requirements: [], after: AfterAction(config: c.string("after")))
+                              kind: .jsModuleAction(index: i), requirements: [],
+                              after: c.string("after").map { AfterAction(config: $0) } ?? parent?.after ?? .none,
+                              stayVisible: c.bool("stay visible") ?? parent?.stayVisible ?? false,
+                              captureHTML: c.bool("capture html") ?? parent?.captureHTML ?? false)
         }
     }
 }
