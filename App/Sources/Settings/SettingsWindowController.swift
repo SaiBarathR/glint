@@ -7,6 +7,7 @@ final class SettingsWindowController {
     static let shared = SettingsWindowController()
     func show(pane: SettingsPane? = nil) {}
     func show(extensionKey: String) {}
+    static func renderSnapshots(to directory: URL) {}
 }
 
 final class OnboardingWindowController {
