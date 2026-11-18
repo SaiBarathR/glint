@@ -10,7 +10,9 @@ enum KeySender {
         press(keyCode: CGKeyCode(combo.keyCode), flags: cgFlags(combo.modifiers))
     }
 
-    static func press(keyCode: CGKeyCode, flags: CGEventFlags) {
+    static func press(keyCode usKeyCode: CGKeyCode, flags: CGEventFlags) {
+        // Codes are US-layout positions; type the same character on the user's layout.
+        let keyCode = CGKeyCode(KeyLayout.translate(UInt16(usKeyCode), command: flags.contains(.maskCommand)))
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
         down.flags = flags

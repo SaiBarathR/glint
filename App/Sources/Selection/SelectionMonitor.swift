@@ -133,13 +133,19 @@ final class SelectionMonitor {
         }
     }
 
+    /// Matches the character the key types (layout-aware), with or without the ⌘-layout switch.
+    static func typed(_ e: NSEvent, oneOf chars: Set<String>) -> Bool {
+        let candidates = [e.charactersIgnoringModifiers, e.characters].compactMap { $0?.lowercased() }
+        return candidates.contains { chars.contains($0) }
+    }
+
     private func handleKey(_ e: NSEvent) {
         if e.cgEvent?.getIntegerValueField(.eventSourceUserData) == KeySender.marker { return }
         switch e.type {
         case .flagsChanged:
             delegate?.selectionMonitor(self, modifiersChanged: e.modifierFlags)
         case .keyDown:
-            if e.modifierFlags.contains(.command), (e.keyCode == UInt16(kVK_ANSI_C) || e.keyCode == UInt16(kVK_ANSI_X)) {
+            if e.modifierFlags.contains(.command), Self.typed(e, oneOf: ["c", "x"]) {
                 Clipboard.noteUserCopy()
             }
             delegate?.selectionMonitorShouldDismiss(self, reason: .key)
@@ -149,7 +155,7 @@ final class SelectionMonitor {
             let code = Int(e.keyCode)
             let arrows = [kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow, kVK_Home, kVK_End]
             let isShiftArrow = arrows.contains(code) && e.modifierFlags.contains(.shift)
-            let isSelectAll = code == kVK_ANSI_A && e.modifierFlags.contains(.command)
+            let isSelectAll = e.modifierFlags.contains(.command) && Self.typed(e, oneOf: ["a"])
             guard isShiftArrow || isSelectAll else { return }
             keyboardTimer?.invalidate()
             keyboardTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in

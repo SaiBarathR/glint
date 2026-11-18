@@ -206,7 +206,7 @@ command}`. Numeric modifiers use the NSEvent bit layout (shift `131072`, control
 Modifier words: `command`/`cmd`/`meta`/`super`, `shift`, `option`/`opt`/`alt`, `control`/`ctrl`/`ctl`.
 Keys: letters, digits, `= - ] [ ' ; \ , / . \``, and `return`/`enter`, `tab`, `space`, `delete`/`backspace`,
 `forwarddelete`, `escape`/`esc`, `home`, `end`, `pageup`, `pagedown`, `left`/`right`/`up`/`down` (also
-`arrowleft` and so on), `f1`–`f12`, `keypadenter`. Key codes follow the US ANSI layout.
+`arrowleft` and so on), `f1`–`f12`, `keypadenter`. Keys are named by the character they type (numeric key codes are read as positions on a US keyboard), and Glint presses whichever key types that character on your current layout, so `command x` is ⌘X on Dvorak, AZERTY or QWERTZ too.
 
 ```yaml
 name: Strikethrough (Notes)

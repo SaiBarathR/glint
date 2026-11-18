@@ -308,6 +308,13 @@ final class SessionHost: ActionHost {
     private var gaveUp = false
     private var canDeliverInput: Bool {
         guard !gaveUp, isCurrent else { return false }
+        // Never type behind an unanswered Glint ⌘C: the app would handle both back to back.
+        if !Thread.isMainThread {
+            for _ in 0..<50 where DispatchQueue.main.sync(execute: { Clipboard.copyOutstanding }) {
+                Thread.sleep(forTimeInterval: 0.04)
+            }
+            guard isCurrent else { return false }
+        }
         if selection.isStillFocused() { return true }
         if !Thread.isMainThread {
             for _ in 0..<20 {

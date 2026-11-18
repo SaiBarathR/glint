@@ -127,15 +127,6 @@ enum Clipboard {
         }
     }
 
-    /// True when the app answers an Accessibility request within 0.1 s.
-    private static func appIsResponsive(_ pid: pid_t) -> Bool {
-        guard pid != 0 else { return false }
-        let el = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(el, 0.1)
-        var value: AnyObject?
-        return AXUIElementCopyAttributeValue(el, kAXRoleAttribute as CFString, &value) == .success
-    }
-
     /// Should an app's answer to Glint's ⌘C, arriving now, be undone? Not if the user copied in the meantime:
     /// a ⌘C/⌘X key, or a change arriving well after a right-click / menu-bar click (a menu's Copy item).
     private static func shouldRestore(userGen: Int, sentAt: Date) -> Bool {
@@ -150,15 +141,16 @@ enum Clipboard {
         // Prepare and send on the main actor in one step. Never send a second ⌘C while one is unanswered
         // (its late answer would be mistaken for ours), never after the capture was cancelled, and never
         // right after the user copied (or may be copying) something themselves.
-        let prepared = await MainActor.run { () -> (Snapshot, Int, Date, pid_t)? in
+        let prepared = await MainActor.run { () -> (Snapshot, Int, Date)? in
             guard !Task.isCancelled, !copyOutstanding, Date().timeIntervalSince(lastUserCopyAt) > 0.5 else { return nil }
-            flushPendingReturn()
+            // A pending paste-result return is left alone (flushing it could race the app's queued ⌘V); the
+            // restores below keep its change count current, so it still returns the user's clipboard.
             let before = snapshot()
             KeySender.command(.copy)
             copyOutstanding = true
-            return (before, userCopyGeneration, Date(), NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0)
+            return (before, userCopyGeneration, Date())
         }
-        guard let (sentBaseline, userGen, sentAt, targetPID) = prepared else { return nil }
+        guard let (sentBaseline, userGen, sentAt) = prepared else { return nil }
 
         // Poll for the answer (even if cancelled, so the clipboard always settles). Glint's own writes in the
         // meantime (a slow action finishing) aren't the answer: they become the baseline to return to.
@@ -179,9 +171,9 @@ enum Clipboard {
             // The app may still answer late. Keep watching until it does or the window ends; Glint's own writes
             // in the meantime become the new baseline to return to.
             Task.detached {
-                // An app that answers Accessibility promptly but ignored ⌘C most likely had nothing to copy:
-                // watch briefly so the fallback reopens soon. A busy app gets the full window.
-                let lateDeadline = sentAt.addingTimeInterval(appIsResponsive(targetPID) ? 0.7 : 1.85)
+                // Web and Electron apps copy in another process that can answer late even when the app itself
+                // responds, so always watch the full window.
+                let lateDeadline = sentAt.addingTimeInterval(1.85)
                 var baseline = before
                 var settled = false
                 while Date() < lateDeadline, !settled {
