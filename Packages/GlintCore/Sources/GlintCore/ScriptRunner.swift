@@ -45,8 +45,7 @@ public enum ScriptRunner {
 
         let process = Process()
         var args: [String] = []
-        if let interpreter, !interpreter.isEmpty {
-            let parts = interpreter.split(separator: " ").map(String.init)
+        if let interpreter, case let parts = interpreter.split(whereSeparator: \.isWhitespace).map(String.init), !parts.isEmpty {
             if parts[0].hasPrefix("/") {
                 process.executableURL = URL(fileURLWithPath: parts[0])
                 args = Array(parts.dropFirst())
@@ -136,24 +135,36 @@ public enum ScriptRunner {
         return ShellResult(status: process.isRunning ? -2 : process.terminationStatus, stdout: out, stderr: err)
     }
 
-    /// Runs AppleScript source or a script file. Returns the string result or an error message.
-    public static func runAppleScript(source: String?, file: URL?) -> Result<String?, ScriptError> {
-        let work = { () -> Result<String?, ScriptError> in
-            var errorInfo: NSDictionary?
-            let script: NSAppleScript?
-            if let file { script = NSAppleScript(contentsOf: file, error: &errorInfo) }
-            else { script = NSAppleScript(source: source ?? "") }
-            guard let script else {
-                return .failure(ScriptError(message: (errorInfo?[NSAppleScript.errorMessage] as? String) ?? "Couldn't load script"))
+    /// Runs AppleScript source or a script file in a separate `osascript` process, so a slow script,
+    /// a dialog or a permission prompt can't block the app. Returns the result as text.
+    public static func runAppleScript(source: String?, file: URL?, timeout: TimeInterval = 120) async -> Result<String?, ScriptError> {
+        await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let fm = FileManager.default
+                var scriptFile = file
+                var temp: URL?
+                if scriptFile == nil {
+                    let t = fm.temporaryDirectory.appendingPathComponent("glint-\(UUID().uuidString).applescript")
+                    do { try (source ?? "").write(to: t, atomically: true, encoding: .utf8) } catch {
+                        cont.resume(returning: .failure(ScriptError(message: error.localizedDescription))); return
+                    }
+                    temp = t
+                    scriptFile = t
+                }
+                defer { if let temp { try? fm.removeItem(at: temp) } }
+                let r = runShellSync(source: nil, file: scriptFile, interpreter: "/usr/bin/osascript", environment: [:],
+                                     workingDirectory: nil, stdin: nil, timeout: timeout)
+                if r.status == 0 {
+                    let out = r.stdout.hasSuffix("\n") ? String(r.stdout.dropLast()) : r.stdout
+                    cont.resume(returning: .success(out.isEmpty ? nil : out))
+                } else {
+                    var msg = r.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // "…/glint-UUID.applescript:12:20: execution error: Message (-1728)" → "Message (-1728)"
+                    if let range = msg.range(of: "error: ") { msg = String(msg[range.upperBound...]) }
+                    cont.resume(returning: .failure(ScriptError(message: msg.isEmpty ? "AppleScript failed" : msg)))
+                }
             }
-            let output = script.executeAndReturnError(&errorInfo)
-            if let errorInfo {
-                return .failure(ScriptError(message: (errorInfo[NSAppleScript.errorMessage] as? String) ?? "AppleScript error"))
-            }
-            return .success(output.stringValue)
         }
-        if Thread.isMainThread { return work() }
-        return DispatchQueue.main.sync(execute: work)
     }
 
     /// Runs a Shortcuts.app shortcut with `input` and returns its text output.

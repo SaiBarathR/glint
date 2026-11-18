@@ -265,7 +265,7 @@ final class ActionRegistry: ObservableObject {
 
     func uninstall(_ key: String) {
         guard let entry = entries.first(where: { $0.key == key }), entry.isUserInstalled,
-              let url = entry.manifest?.bundleURL else { return }
+              let url = entry.manifest?.sourceURL ?? entry.manifest?.bundleURL else { return }
         try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
         prefs.disabledActions.remove(key)
         prefs.knownActions.remove(key)

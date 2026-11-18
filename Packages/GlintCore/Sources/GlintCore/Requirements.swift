@@ -49,7 +49,8 @@ public enum RequirementEvaluator {
             case "email": satisfied = content.emails.count == 1
             case "emails": satisfied = !content.emails.isEmpty
             case "path": satisfied = content.paths.count >= 1
-            case "html": satisfied = context.html != nil
+            // HTML is captured when the action runs (`capture html`), so it only has to be possible.
+            case "html": satisfied = context.html != nil || (action.captureHTML && hasText && context.canCopy)
             case "number", "math": satisfied = content.mathResult != nil
             case "editable": satisfied = context.canPaste || context.canCut
             case "none", "": satisfied = true

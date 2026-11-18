@@ -4,11 +4,11 @@ import GlintCore
 /// Runs bar actions: built-ins natively, extensions through the GlintCore runtime.
 final class ActionPerformer: ActionHost {
     static let shared = ActionPerformer()
-    private lazy var runtime = ExtensionRuntime(host: self)
     private let popup = PopupController.shared
     private let prefs = Preferences.shared
-    /// The selection the bar was shown for.
-    var selection: CapturedSelection?
+    /// The selection the bar was shown for. Each new selection starts a new session.
+    var selection: CapturedSelection? { didSet { session &+= 1 } }
+    private(set) var session = 0
     private(set) var log: [String] = []
 
     func perform(_ action: BarAction, flags: NSEvent.ModifierFlags) {
@@ -21,11 +21,22 @@ final class ActionPerformer: ActionHost {
         case .extensionAction(let manifest, let spec, let input, let dynamicIndex):
             if !spec.stayVisible { popup.dismiss() }
             let options = prefs.optionValues(for: manifest)
-            Task { [runtime] in
+            // Results are tied to this selection: if the user has moved on to another one by the time a slow
+            // action finishes, its UI updates are dropped and a paste becomes a copy.
+            let host = SessionHost(performer: self, session: session)
+            Task {
+                var input = input
+                var context = selection.context
+                if spec.captureHTML, input.html == nil, let copied = await Clipboard.copySelection() {
+                    input.html = copied.1
+                    context.html = copied.1
+                }
                 // Let the target app regain its key state before keystrokes arrive.
                 try? await Task.sleep(nanoseconds: 40_000_000)
-                await runtime.perform(spec, of: manifest, input: input, context: selection.context, modifiers: mods,
+                let runtime = ExtensionRuntime(host: host)
+                await runtime.perform(spec, of: manifest, input: input, context: context, modifiers: mods,
                                       options: options, dynamicIndex: dynamicIndex)
+                _ = host // keep the host alive until the action has finished
             }
         }
     }
@@ -215,7 +226,44 @@ final class ActionPerformer: ActionHost {
 
     func clearLog() { log.removeAll() }
 
+    func currentClipboardText() -> String? {
+        if Thread.isMainThread { return Clipboard.string }
+        return DispatchQueue.main.sync { Clipboard.string }
+    }
+
     private func onMain(_ block: @escaping () -> Void) {
         if Thread.isMainThread { block() } else { DispatchQueue.main.async(execute: block) }
     }
+}
+
+
+/// Forwards an action's host calls to the performer while its selection is still the current one.
+final class SessionHost: ActionHost {
+    private let performer: ActionPerformer
+    private let session: Int
+    init(performer: ActionPerformer, session: Int) {
+        self.performer = performer
+        self.session = session
+    }
+
+    private var isCurrent: Bool {
+        if Thread.isMainThread { return performer.session == session }
+        return DispatchQueue.main.sync { performer.session == session }
+    }
+
+    func pasteText(_ text: String, restoreClipboard: Bool) {
+        if isCurrent { performer.pasteText(text, restoreClipboard: restoreClipboard) } else { performer.copyText(text) }
+    }
+    func copyText(_ text: String) { performer.copyText(text) }
+    func openURL(_ url: URL, background: Bool, appBundleID: String?) {
+        performer.openURL(url, background: background, appBundleID: appBundleID)
+    }
+    func pressKey(_ combo: KeyCombo) { if isCurrent { performer.pressKey(combo) } }
+    func performCommand(_ command: StandardCommand) { if isCurrent { performer.performCommand(command) } }
+    func performService(_ name: String, text: String) -> Bool { performer.performService(name, text: text) }
+    func showText(_ text: String, preview: Bool) { if isCurrent { performer.showText(text, preview: preview) } }
+    func showStatus(success: Bool) { if isCurrent { performer.showStatus(success: success) } }
+    func showSettings(extensionID: String) { performer.showSettings(extensionID: extensionID) }
+    func log(_ message: String, extensionID: String) { performer.log(message, extensionID: extensionID) }
+    func currentClipboardText() -> String? { performer.currentClipboardText() }
 }

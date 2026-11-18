@@ -139,8 +139,11 @@ public enum JavaScriptRunner {
         return JSCheckScriptSyntax(ctx.jsGlobalContextRef, str, nil, 1, nil)
     }
 
+    /// - Parameter sandboxed: no network, timers or sleeping. Used whenever code runs without the user
+    ///   having asked for an action (describing a module before install, building the bar).
     static func makeContext(env: Environment?, host: ActionHost?, errors: Box<String?>, timeLimit: Double = 30,
-                            allowSleep: Bool = true) -> JSContext {
+                            sandboxed: Bool = false) -> JSContext {
+        let allowSleep = !sandboxed
         let ctx = JSContext()!
         applyTimeLimit(ctx, seconds: timeLimit)
         ctx.exceptionHandler = { _, exc in
@@ -185,12 +188,15 @@ public enum JavaScriptRunner {
             if allowSleep { Thread.sleep(forTimeInterval: min(ms, 10_000) / 1000) }
         }
         let setTimeoutFn: @convention(block) (JSValue, Double) -> Void = { fn, ms in
+            guard !sandboxed else { return }
             DispatchQueue.global().asyncAfter(deadline: .now() + ms / 1000) { fn.call(withArguments: []) }
         }
         let htmlToText: @convention(block) (String) -> String = { html in
             html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         }
-        let clipboardText: @convention(block) () -> String = { env?.context.clipboardText ?? "" }
+        let clipboardText: @convention(block) () -> String = { [weak host] in
+            host?.currentClipboardText() ?? env?.context.clipboardText ?? ""
+        }
         let bundleURL = env?.bundleURL
         let readModule: @convention(block) (String) -> JSValue? = { path in
             guard let bundleURL else { return JSValue(nullIn: JSContext.current()) }
@@ -204,6 +210,9 @@ public enum JavaScriptRunner {
         let fetch: @convention(block) (String, String, JSValue, JSValue) -> JSValue = { urlString, method, headers, body in
             let ctx = JSContext.current()!
             return JSValue(newPromiseIn: ctx) { resolve, reject in
+                if sandboxed {
+                    reject?.call(withArguments: ["Network access isn't available here"]); return
+                }
                 guard let url = URL(string: urlString) else {
                     reject?.call(withArguments: ["Invalid URL: \(urlString)"]); return
                 }
@@ -271,7 +280,7 @@ public enum JavaScriptRunner {
 
     public static func describeModule(source: String) -> ModuleInfo {
         let errors = Box<String?>(nil)
-        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 2, allowSleep: false)
+        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 1, sandboxed: true)
         ctx.evaluateScript(source)
         var info = ModuleInfo()
         let exports = moduleExports(ctx)
@@ -336,7 +345,7 @@ public enum JavaScriptRunner {
     public static func populate(moduleSource: String, env: Environment) -> [[String: Any]] {
         let errors = Box<String?>(nil)
         // Runs while the bar is being built, so keep it short and never sleep.
-        let ctx = makeContext(env: env, host: nil, errors: errors, timeLimit: 0.5, allowSleep: false)
+        let ctx = makeContext(env: env, host: nil, errors: errors, timeLimit: 0.5, sandboxed: true)
         ctx.evaluateScript(moduleSource)
         let exports = moduleExports(ctx)
         guard let fn = exports.forProperty("actions"), isFunction(fn) else { return [] }

@@ -158,7 +158,12 @@ enum AX {
         guard let bar = element(appEl, kAXMenuBarAttribute) else { return result }
         let submenuTitles: Set<String> = ["font", "style", "text", "format", "formatting", "schrift", "police", "fuente", "stil"]
 
-        func scan(_ menu: AXUIElement, depth: Int) {
+        // ⌘B is "Build" in IDEs, so it only counts as Bold when it is titled so or lives in a formatting menu.
+        let boldTitles: Set<String> = ["bold", "fett", "gras", "negrita", "grassetto", "negrito", "vet", "fed", "fet",
+                                       "lihavoitu", "pogrubienie", "tučné", "полужирный", "жирный", "太字", "粗体", "粗體",
+                                       "굵게", "kalın", "κομψή", "έντονα"]
+
+        func scan(_ menu: AXUIElement, depth: Int, inFormatMenu: Bool) {
             for item in children(menu) {
                 if let char = string(item, kAXMenuItemCmdCharAttribute)?.uppercased(), char.count == 1,
                    ((attribute(item, kAXMenuItemCmdModifiersAttribute) as? Int) ?? 0) == 0 {
@@ -167,18 +172,21 @@ enum AX {
                     case "X": result.cut = enabled
                     case "C": result.copy = enabled
                     case "V": result.paste = enabled
-                    case "B": result.bold = enabled
+                    case "B":
+                        let title = string(item, kAXTitleAttribute)?.lowercased() ?? ""
+                        if inFormatMenu || boldTitles.contains(title) { result.bold = enabled }
                     default: break
                     }
                 } else if depth < 2, result.bold == nil,
                           let title = string(item, kAXTitleAttribute)?.lowercased(), submenuTitles.contains(title) {
-                    for sub in children(item) { scan(sub, depth: depth + 1) }
+                    for sub in children(item) { scan(sub, depth: depth + 1, inFormatMenu: true) }
                 }
             }
         }
 
         for top in children(bar).dropFirst() { // skip the Apple menu
-            for menu in children(top) { scan(menu, depth: 0) }
+            let topTitle = string(top, kAXTitleAttribute)?.lowercased() ?? ""
+            for menu in children(top) { scan(menu, depth: 0, inFormatMenu: submenuTitles.contains(topTitle)) }
             if result.cut != nil, result.copy != nil, result.paste != nil, result.bold != nil { break }
         }
         return result

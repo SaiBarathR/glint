@@ -178,6 +178,8 @@ public struct ExtensionManifest: Equatable, Identifiable {
     public var moduleSource: String?
     /// Folder the extension was loaded from (nil for built-ins / snippets not yet installed).
     public var bundleURL: URL?
+    /// The file or folder on disk that holds this extension (what uninstall removes).
+    public var sourceURL: URL?
     /// Original snippet text, kept so snippet extensions can be re-saved and shown.
     public var snippetSource: String?
     public var isBuiltIn: Bool

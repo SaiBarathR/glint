@@ -74,6 +74,7 @@ final class SelectionMonitor {
         let point = NSEvent.mouseLocation
         switch e.type {
         case .leftMouseDown:
+            Clipboard.noteActivity()
             delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
             downPoint = point
             downTime = Date()
@@ -92,7 +93,14 @@ final class SelectionMonitor {
             }
         case .leftMouseDragged:
             maxDistance = max(maxDistance, hypot(point.x - downPoint.x, point.y - downPoint.y))
-            if maxDistance >= Self.dragThreshold { longPressTimer?.invalidate() }
+            if maxDistance >= Self.dragThreshold {
+                longPressTimer?.invalidate()
+                // Held, then started dragging: it's a selection after all, not a paste request.
+                if longPressFired {
+                    longPressFired = false
+                    delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
+                }
+            }
         case .leftMouseUp:
             longPressTimer?.invalidate()
             guard prefs.enabled, !longPressFired, !suppressed else { return }
@@ -109,6 +117,7 @@ final class SelectionMonitor {
             }
             if let trigger { delegate?.selectionMonitor(self, didDetect: trigger, at: point, iBeam: downIBeam) }
         case .rightMouseDown, .otherMouseDown:
+            Clipboard.noteActivity()
             delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
         case .scrollWheel:
             if abs(e.scrollingDeltaY) > 2 || abs(e.scrollingDeltaX) > 2 {
@@ -127,6 +136,7 @@ final class SelectionMonitor {
         case .flagsChanged:
             delegate?.selectionMonitor(self, modifiersChanged: e.modifierFlags)
         case .keyDown:
+            Clipboard.noteActivity()
             delegate?.selectionMonitorShouldDismiss(self, reason: .key)
             keyboardTimer?.invalidate()
         case .keyUp:

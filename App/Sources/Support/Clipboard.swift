@@ -19,6 +19,7 @@ enum Clipboard {
     }
 
     static func restore(_ s: Snapshot) {
+        generation &+= 1
         pb.clearContents()
         let items = s.items.map { dict -> NSPasteboardItem in
             let item = NSPasteboardItem()
@@ -30,7 +31,13 @@ enum Clipboard {
 
     static var string: String? { pb.string(forType: .string) }
 
+    /// Bumped whenever Glint writes the clipboard or the user does anything (key, click). A late-⌘C
+    /// watcher only restores while the generation is unchanged, so it never undoes the user's own copy.
+    static var generation = 0
+    static func noteActivity() { generation &+= 1 }
+
     static func setString(_ s: String) {
+        generation &+= 1
         pb.clearContents()
         pb.setString(s, forType: .string)
     }
@@ -78,7 +85,10 @@ enum Clipboard {
     /// Returns (text, html). Nil when nothing was copied or only files were copied.
     static func copySelection(timeout: TimeInterval = 0.35) async -> (String, String?)? {
         let before = await MainActor.run { snapshot() }
-        await MainActor.run { KeySender.command(.copy) }
+        let gen = await MainActor.run { () -> Int in
+            KeySender.command(.copy)
+            return generation
+        }
         let deadline = Date().addingTimeInterval(timeout)
         var changed = false
         while Date() < deadline, !Task.isCancelled {
@@ -88,15 +98,17 @@ enum Clipboard {
         guard changed else {
             // The app may still answer the ⌘C late: keep watching and put the user's clipboard back if it does.
             Task.detached {
-                let lateDeadline = Date().addingTimeInterval(2)
+                let lateDeadline = Date().addingTimeInterval(1.5)
                 while Date() < lateDeadline {
                     try? await Task.sleep(nanoseconds: 50_000_000)
-                    let restored = await MainActor.run { () -> Bool in
+                    let done = await MainActor.run { () -> Bool in
+                        // Anything else happened (user input, a Glint write): leave the clipboard alone.
+                        guard generation == gen else { return true }
                         guard pb.changeCount != before.changeCount else { return false }
                         restore(before)
                         return true
                     }
-                    if restored { break }
+                    if done { break }
                 }
             }
             return nil

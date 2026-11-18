@@ -17,7 +17,12 @@ public enum ExtensionLoader {
             let ext = file.pathExtension.lowercased()
             if ext == "js" || ext == "ts" {
                 let src = try String(contentsOf: file, encoding: .utf8)
-                return try loadJavaScriptModule(source: src, bundleURL: url, isBuiltIn: isBuiltIn)
+                var m = try loadJavaScriptModule(source: src, bundleURL: url, isBuiltIn: isBuiltIn)
+                if m.identifier.hasPrefix("snippet.") {
+                    m.identifier = "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
+                }
+                m.sourceURL = url
+                return m
             }
             let dict = try readDictionary(file)
             var manifest = try ManifestParser.parse(dict, bundleURL: url, isBuiltIn: isBuiltIn)
@@ -30,6 +35,7 @@ public enum ExtensionLoader {
             if manifest.identifier.hasPrefix("snippet.") {
                 manifest.identifier = "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
             }
+            manifest.sourceURL = url
             return manifest
         }
         throw ManifestError.unreadable("No Config.yaml, Config.json or Config.plist in \(url.lastPathComponent)")
@@ -77,7 +83,10 @@ public enum ExtensionLoader {
             let ac = ConfigDict(a)
             if ac.bool("dynamic") == true {
                 actions.append(ActionSpec(id: "dynamic", title: name, icon: icon, kind: .jsModuleAction(index: -1),
-                                          requirements: defaults.requirements ?? ["text"]))
+                                          requirements: defaults.requirements ?? ["text"],
+                                          requiredApps: defaults.apps, excludedApps: defaults.excludedApps,
+                                          stayVisible: defaults.stayVisible ?? false,
+                                          captureHTML: defaults.captureHTML ?? false))
                 continue
             }
             let req = ac.strings("requirements") ?? defaults.requirements ?? ["text"]
@@ -85,10 +94,12 @@ public enum ExtensionLoader {
                                       icon: ac.string("icon") ?? icon, kind: .jsModuleAction(index: i),
                                       requirements: req, regex: ac.string("regex") ?? defaults.regex,
                                       after: AfterAction(config: ac.string("after") ?? defaults.after),
-                                      requiredApps: ManifestParser.ActionDefaults.bundleIDs(ac["apps", "required apps"]),
-                                      excludedApps: ManifestParser.ActionDefaults.bundleIDs(ac["excluded apps"]),
-                                      stayVisible: ac.bool("stay visible") ?? false,
-                                      captureHTML: ac.bool("capture html") ?? false))
+                                      requiredApps: nonEmpty(ManifestParser.ActionDefaults.bundleIDs(ac["apps", "required apps"]))
+                                          ?? defaults.apps,
+                                      excludedApps: nonEmpty(ManifestParser.ActionDefaults.bundleIDs(ac["excluded apps"]))
+                                          ?? defaults.excludedApps,
+                                      stayVisible: ac.bool("stay visible") ?? defaults.stayVisible ?? false,
+                                      captureHTML: ac.bool("capture html") ?? defaults.captureHTML ?? false))
         }
         if let err = info.error, actions.isEmpty { throw ManifestError.unreadable("JavaScript error: \(err)") }
         if actions.isEmpty { throw ManifestError.noActions }
@@ -99,6 +110,8 @@ public enum ExtensionLoader {
                                  actions: actions, moduleSource: source, bundleURL: bundleURL,
                                  snippetSource: snippetSource, isBuiltIn: isBuiltIn)
     }
+
+    private static func nonEmpty(_ a: [String]) -> [String]? { a.isEmpty ? nil : a }
 
     // MARK: Snippets
 
@@ -192,6 +205,7 @@ public enum ExtensionLoader {
             let text = try String(contentsOf: snippet, encoding: .utf8)
             var m = try parseSnippet(text)
             m.bundleURL = folder
+            m.sourceURL = folder
             m.isBuiltIn = isBuiltIn
             return m
         }
@@ -214,6 +228,7 @@ public enum ExtensionLoader {
                     var m = isSnippet(text) ? try parseSnippet(text)
                                             : try ManifestParser.parse(parseYAMLDictionary(text), isBuiltIn: isBuiltIn)
                     m.isBuiltIn = isBuiltIn
+                    m.sourceURL = item
                     if m.identifier.hasPrefix("snippet."), isBuiltIn {
                         m.identifier = "builtin." + item.deletingPathExtension().lastPathComponent.lowercased()
                     }

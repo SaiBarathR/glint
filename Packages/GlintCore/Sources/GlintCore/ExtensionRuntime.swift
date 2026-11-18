@@ -97,7 +97,7 @@ public final class ExtensionRuntime {
         case .appleScript:
             let extras = Templates.extras(input: input, context: context)
             let filled = source.map { Templates.fillAppleScript($0, text: input.matchedText, options: options, extras: extras) }
-            switch ScriptRunner.runAppleScript(source: filled, file: file) {
+            switch await ScriptRunner.runAppleScript(source: filled, file: file) {
             case .success(let s): return (s?.isEmpty == false) ? .result(s!) : .done
             case .failure(let e): return .failure(e.message)
             }
@@ -119,9 +119,14 @@ public final class ExtensionRuntime {
     /// Environment for shell scripts. Variables are provided with both GLINT_ and POPCLIP_ prefixes.
     public static func environment(manifest: ExtensionManifest, input: ActionInput, context: SelectionContext,
                                    modifiers: ModifierState, options: [String: String]) -> [String: String] {
+        // The environment (with both prefixes) must stay well under the 1 MB exec limit, so large values are
+        // left out; scripts can always read the full text from stdin.
+        let limit = 64 * 1024
+        func capped(_ s: String) -> String { s.utf8.count <= limit ? s : "" }
         var base: [String: String] = [
-            "TEXT": input.matchedText,
-            "FULL_TEXT": input.text,
+            "TEXT": capped(input.matchedText),
+            "FULL_TEXT": input.text == input.matchedText ? capped(input.text) : capped(input.text),
+            "TEXT_TRUNCATED": input.matchedText.utf8.count > limit ? "1" : "0",
             "URLS": input.urls.joined(separator: "\n"),
             "BUNDLE_IDENTIFIER": context.appBundleID ?? "",
             "APP_NAME": context.appName ?? "",
@@ -129,8 +134,8 @@ public final class ExtensionRuntime {
             "EXTENSION_IDENTIFIER": manifest.identifier,
             "EXTENSION_PATH": manifest.bundleURL?.path ?? "",
             "BROWSER_URL": context.sourceURL ?? "",
-            "HTML": input.html ?? "",
-            "MARKDOWN": input.text,
+            "HTML": capped(input.html ?? ""),
+            "MARKDOWN": capped(input.text),
         ]
         for (i, g) in input.regexGroups.enumerated() { base["REGEX_GROUP_\(i)"] = g }
         for (k, v) in options {

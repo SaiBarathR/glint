@@ -12,13 +12,19 @@ enum IconRenderer {
     private static let cacheLock = NSLock()
 
     static func image(for spec: String?, baseURL: URL?, size: CGFloat, fallbackTitle: String? = nil) -> NSImage? {
-        let key = "\(spec ?? "")|\(baseURL?.path ?? "")|\(size)|\(fallbackTitle ?? "")"
+        // The title only matters when there's no icon spec; keeping it out of the key stops the cache growing
+        // with every "Open <host>" / "Email <address>" title.
+        let hasSpec = !(spec ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        let key = "\(spec ?? "")|\(baseURL?.path ?? "")|\(size)|\(hasSpec ? "" : (fallbackTitle ?? ""))"
         cacheLock.lock()
         if let hit = cache[key] { cacheLock.unlock(); return hit }
         cacheLock.unlock()
         let img = render(spec: spec, baseURL: baseURL, size: size, fallbackTitle: fallbackTitle)
         if let img {
-            cacheLock.lock(); cache[key] = img; cacheLock.unlock()
+            cacheLock.lock()
+            if cache.count > 400 { cache.removeAll() }
+            cache[key] = img
+            cacheLock.unlock()
         }
         return img
     }
@@ -43,8 +49,9 @@ enum IconRenderer {
         let lower = spec.lowercased()
 
         if lower.hasPrefix("symbol:") || lower.hasPrefix("sf:") {
-            let name = String(spec.split(separator: ":", maxSplits: 1)[1])
-            return symbol(name, size: size, shape: shape, filled: filled)
+            let name = String(spec.drop { $0 != ":" }.dropFirst()).trimmingCharacters(in: .whitespaces)
+            return (name.isEmpty ? nil : symbol(name, size: size, shape: shape, filled: filled))
+                ?? textIcon(initials(fallbackTitle ?? "?"), shape: shape, filled: filled, size: size)
         }
         if lower.hasPrefix("text:") {
             return textIcon(String(spec.dropFirst(5)), shape: shape, filled: filled, size: size)

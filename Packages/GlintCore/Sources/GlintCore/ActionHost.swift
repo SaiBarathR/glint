@@ -21,6 +21,12 @@ public protocol ActionHost: AnyObject {
     func showSettings(extensionID: String)
     /// Log a line to the extension console.
     func log(_ message: String, extensionID: String)
+    /// The clipboard's current text (for `pasteboard.text` in JavaScript).
+    func currentClipboardText() -> String?
+}
+
+public extension ActionHost {
+    func currentClipboardText() -> String? { nil }
 }
 
 public enum ActionOutcome: Equatable {

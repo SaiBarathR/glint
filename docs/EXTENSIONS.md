@@ -139,7 +139,7 @@ alternative names after the main one.
 | `stay visible` | Keep the bar open after the action runs (default `false`). |
 | `restore pasteboard` (`restore clipboard`) | After `paste-result`, put the previous clipboard contents back. |
 | `trim` | Trim whitespace and newlines from both ends of the selection before running (default `true`). Set `false` to receive the exact selection. |
-| `capture html` | Ask for the selection's HTML as well, which the action reads as `GLINT_HTML` / `glint.input.html`. |
+| `capture html` | Ask for the selection's HTML as well, which the action reads as `GLINT_HTML` / `glint.input.html`. When the action runs, Glint copies the selection (restoring the clipboard afterwards) to get the HTML from apps that provide it. |
 | `interpreter` | Shell interpreter for `shell script` / `shell script file`. See [Shell scripts](#shell-scripts). |
 | `description` | Per-action description. |
 
@@ -183,6 +183,9 @@ When an action dictionary holds several of these keys, the first one in this ord
 | `shell script file` (`script file`) | Run a script file from the bundle folder. |
 | `applescript` (`apple script`) | Run inline AppleScript (placeholders are filled in). |
 | `applescript file` (`apple script file`) | Run an AppleScript file (`.applescript` or compiled `.scpt`) from the bundle. Placeholders are **not** filled in files. |
+
+AppleScript runs in a separate `osascript` process with a 120-second timeout, so dialogs, `delay` and
+first-run Automation prompts never block Glint. The result is the script's return value as text.
 | `javascript` (`java script`) | Run inline JavaScript. |
 | `javascript file` (`java script file`) | Run a JavaScript file from the bundle. A file that assigns `exports` is a one-action module. |
 | `key combos` | Press several key combos in sequence (50 ms apart). |
@@ -234,7 +237,7 @@ in YAML).
 | `email` | The selection contains exactly one email address. The input becomes **that address**. |
 | `emails` | At least one email address. |
 | `path` | A line of the selection is a path (`/…`, `~/…` or `file://…`) that exists on disk. |
-| `html` | The app provided the selection as HTML. |
+| `html` | The selection's HTML is available: the app provided it, or the action sets `capture html` (the HTML is then fetched when the action runs). |
 | `number` / `math` | The whole selection is an arithmetic expression Glint can calculate. |
 | `none` or empty | Always satisfied. |
 
@@ -395,6 +398,11 @@ A shell action receives:
 | `GLINT_HTML` | Selection HTML, when available (see `capture html`). |
 | `GLINT_MARKDOWN` | Currently the plain selection text. |
 | `GLINT_EXTENSION_IDENTIFIER`, `GLINT_EXTENSION_PATH` | This extension's ID and bundle folder. |
+| `GLINT_TEXT_TRUNCATED` | `1` when the input was too large for the environment (see below), otherwise `0`. |
+
+Text values larger than 64 KB (`GLINT_TEXT`, `GLINT_FULL_TEXT`, `GLINT_MARKDOWN`, `GLINT_HTML`) are left
+empty so the environment stays under macOS's size limit. The full input text is always on **stdin**, so
+scripts that may receive large selections should read stdin.
 
 - **PATH** is prefixed with `/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`.
   `LANG` defaults to `en_US.UTF-8`.
@@ -557,7 +565,9 @@ module.exports = {
 - **Dynamic actions**: when `exports.actions` is a *function* `(input, options, context) => [...]`, Glint
   calls it for each selection and shows the actions it returns (each `{title, icon, after, code}`).
 - Top-level code runs once when the extension loads (to read its config), and again for each run, so keep
-  it free of side effects.
+  it free of side effects. While the config is read (including before you agree to install) and while
+  dynamic `actions` functions build the bar, code runs sandboxed: no network (`fetch`/`axios` reject), no
+  timers, no sleeping, and a short time limit (1 s and 0.5 s). Network calls belong in action code.
 - In a `Config.yaml`, `module: main.js` loads that file as the module; its exported `actions` become the
   extension's actions.
 

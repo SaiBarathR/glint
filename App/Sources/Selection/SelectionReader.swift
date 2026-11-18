@@ -25,15 +25,16 @@ enum SelectionReader {
         if prefs.isExcluded(bundleID: app.bundleIdentifier) { return nil }
 
         let pid = app.processIdentifier
-        let (axText, element, editable, secure, bounds, docURL) = await Task.detached(priority: .userInitiated) {
-            () -> (String?, AXUIElement?, Bool, Bool, CGRect?, String?) in
-            guard let el = AX.focusedElement() else { return (nil, nil, false, false, nil, nil) }
+        let (axText, element, editable, secure, bounds, docURL, nativeText) = await Task.detached(priority: .userInitiated) {
+            () -> (String?, AXUIElement?, Bool, Bool, CGRect?, String?, Bool) in
+            guard let el = AX.focusedElement() else { return (nil, nil, false, false, nil, nil, false) }
             AXUIElementSetMessagingTimeout(el, 0.3)
-            if AX.isSecure(el) { return (nil, el, false, true, nil, nil) }
+            if AX.isSecure(el) { return (nil, el, false, true, nil, nil, false) }
             let text = pasteOnly ? nil : AX.selectedText(el)
             let editable = AX.isEditable(el)
             let bounds = pasteOnly ? nil : AX.selectionBounds(el)
-            return (text, el, editable, false, bounds, AX.documentURL(el))
+            let native = AX.textRoles.contains(AX.string(el, kAXRoleAttribute) ?? "")
+            return (text, el, editable, false, bounds, AX.documentURL(el), native)
         }.value
         if secure { return nil }
 
@@ -42,6 +43,8 @@ enum SelectionReader {
         if !pasteOnly, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             // Chromium/Electron need a nudge to expose their tree; next selection will work via AX.
             if element == nil || axText == nil { AX.enableEnhancedAccessibility(pid: pid) }
+            // A native text field that reports an empty selection really has nothing selected.
+            if nativeText, axText != nil { return nil }
             guard allowCopyFallback, prefs.useCopyFallback, let copied = await Clipboard.copySelection() else { return nil }
             text = copied.0
             html = copied.1
