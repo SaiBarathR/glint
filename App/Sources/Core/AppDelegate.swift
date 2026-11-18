@@ -23,6 +23,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             exit(0)
         }
         _ = ActionRegistry.shared
+        if let text = argumentValue("--demo-bar") {
+            // Debug aid: show the real bar for a fake selection at the screen centre.
+            popup.onAction = { [weak self] action, flags in self?.performer.perform(action, flags: flags) }
+            let f = NSScreen.main?.visibleFrame ?? .zero
+            let ctx = SelectionContext(text: text, appBundleID: "com.apple.TextEdit", appName: "TextEdit", canCut: true,
+                                       canPaste: true, canFormat: true, clipboardText: "clip")
+            let sel = CapturedSelection(context: ctx, anchor: CGRect(x: f.midX - 40, y: f.midY, width: 80, height: 16),
+                                        isPasteOnly: false)
+            performer.selection = sel
+            popup.show(actions: ActionBuilder.actions(for: sel), anchor: sel.anchor)
+            return
+        }
         popup.onAction = { [weak self] action, flags in self?.performer.perform(action, flags: flags) }
         monitor.delegate = self
         monitor.start()
