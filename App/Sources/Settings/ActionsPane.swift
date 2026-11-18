@@ -67,7 +67,8 @@ struct ActionsPane: View {
             Group {
                 if let entry = selectedEntry {
                     ExtensionDetailView(entry: entry) { uninstallCandidate = entry }
-                        .id(entry.key)
+                        // Rebuild when the extension is reloaded with different options.
+                        .id(entry.key + "|" + (entry.manifest?.options.map { "\($0.id):\($0.kind.rawValue)" }.joined(separator: ",") ?? ""))
                 } else {
                     emptyDetail
                 }

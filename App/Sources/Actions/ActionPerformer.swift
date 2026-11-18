@@ -86,7 +86,7 @@ final class ActionPerformer: ActionHost {
         self.selection = selection
         // Results, ✓ and choices from a hotkey appear at this selection, not where the last bar was.
         popup.setAnchor(selection.anchor)
-        let actions = ActionBuilder.actions(for: selection).filter { $0.entryKey == entryKey }
+        let actions = ActionBuilder.actions(for: selection, onlyEntry: entryKey)
         guard let first = actions.first else { NSSound.beep(); return }
         perform(first, flags: [])
     }

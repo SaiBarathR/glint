@@ -144,11 +144,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     private func registerHotKeys(showBar: KeyCombo?, actionKeys: [String: KeyCombo]) {
         let center = HotKeyCenter.shared
         center.unregisterAll()
-        if let showBar {
-            center.register(showBar) { [weak self] in self?.capture(trigger: .hotKey, mouse: NSEvent.mouseLocation, iBeam: false) }
+        if let showBar,
+           !center.register(showBar, handler: { [weak self] in self?.capture(trigger: .hotKey, mouse: NSEvent.mouseLocation, iBeam: false) }) {
+            performer.log("The show-bar shortcut \(showBar) is used by another app and couldn't be registered.", extensionID: "glint")
         }
-        for (key, combo) in actionKeys {
-            center.register(combo) { [weak self] in self?.runActionHotKey(key) }
+        for (key, combo) in actionKeys.sorted(by: { $0.key < $1.key }) {
+            if !center.register(combo, handler: { [weak self] in self?.runActionHotKey(key) }) {
+                performer.log("Shortcut \(combo) for \(key) is already in use and couldn't be registered.", extensionID: "glint")
+            }
         }
     }
 

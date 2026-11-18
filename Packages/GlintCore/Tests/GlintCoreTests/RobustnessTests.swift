@@ -335,3 +335,21 @@ final class ReviewRoundFiveTests: XCTestCase {
         XCTAssertEqual(m.actions.map(\.restoreClipboard), [true, false])
     }
 }
+
+final class ReviewRoundTwelveTests: XCTestCase {
+    func testUnaryMinusBindsLooserThanPower() throws {
+        XCTAssertEqual(try Calculator.evaluate("-2^2"), -4)
+        XCTAssertEqual(try Calculator.evaluate("2^-1"), 0.5)
+        XCTAssertEqual(try Calculator.evaluate("(-2)^2"), 4)
+        XCTAssertEqual(try Calculator.evaluate("3 - -2"), 5)
+    }
+
+    func testDatesAndPhonesAreNotMath() {
+        XCTAssertNil(ContentDetector.detect(in: "2026-11-18").mathResult)
+        XCTAssertNil(ContentDetector.detect(in: "10/12/2026").mathResult)
+        XCTAssertNil(ContentDetector.detect(in: "18.11.2026").mathResult)
+        XCTAssertNil(ContentDetector.detect(in: "555-1234").mathResult)
+        XCTAssertEqual(ContentDetector.detect(in: "100 - 25").mathResult, "75")
+        XCTAssertEqual(ContentDetector.detect(in: "10/4").mathResult, "2.5")
+    }
+}

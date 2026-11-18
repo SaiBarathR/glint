@@ -128,7 +128,7 @@ alternative names after the main one.
 | --- | --- |
 | `title` (`name`) | Button title (tooltip / text label). Defaults to the extension name. |
 | `icon` (`image file`) | Defaults to the extension icon. |
-| `identifier` | Stable ID for this action, used for hotkeys and ordering. Defaults to its index. |
+| `identifier` | Optional ID for the action (informational; hotkeys, ordering and enable state apply to the whole extension). Defaults to its index. |
 | *one action kind* | See [Action kinds](#action-kinds). An action dictionary with no kind is ignored. |
 | `requirements` (`required`) | When the action is offered. Default `[text]`. See [Requirements](#requirements-and-regex). |
 | `regex` | Only offer the action when this regular expression matches; the match becomes the input. |

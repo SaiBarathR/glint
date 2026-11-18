@@ -3,14 +3,16 @@ import GlintCore
 
 /// Decides which actions appear on the bar for a selection.
 enum ActionBuilder {
-    static func actions(for selection: CapturedSelection) -> [BarAction] {
+    /// - Parameter onlyEntry: build just this entry's actions, whether or not it is switched on for the bar
+    ///   (per-action hotkeys work independently of the bar).
+    static func actions(for selection: CapturedSelection, onlyEntry: String? = nil) -> [BarAction] {
         let registry = ActionRegistry.shared
         let prefs = Preferences.shared
         let ctx = selection.context
         let detected = ContentDetector.detect(in: ctx.text)
         var out: [BarAction] = []
 
-        for entry in registry.entries where registry.isEnabled(entry.key) || entry.builtin == .installExtension {
+        for entry in registry.entries where onlyEntry.map({ $0 == entry.key }) ?? registry.isEnabled(entry.key) {
             if let builtin = entry.builtin {
                 out += builtinActions(builtin, entry: entry, selection: selection, detected: detected)
                 continue

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import GlintCore
 
 /// Maps characters to key codes on the user's current keyboard layout.
 ///
@@ -36,7 +37,8 @@ enum KeyLayout {
 
     /// Label for a physical key code on the current layout ("C" for Dvorak's key 34), for shortcut displays.
     static func label(forKeyCode code: UInt16) -> String? {
-        guard usCharacter(for: code) != nil else { return nil } // Return, Esc, arrows, F-keys keep their symbols
+        // Return, Esc, arrows and F-keys keep their symbols; other keys (ISO §/<) use the layout's character.
+        if usCharacter(for: code) == nil, KeyCombo.displayName(forKeyCode: code) != nil { return nil }
         let m = current()
         guard let ch = m.plain.first(where: { $0.value == code })?.key, !ch.isWhitespace else { return nil }
         let upper = String(ch).uppercased()

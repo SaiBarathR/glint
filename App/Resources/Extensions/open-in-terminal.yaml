@@ -6,12 +6,17 @@ description: Open a Terminal window at the selected folder path (or the folder o
 icon: symbol:apple.terminal
 requirements: [path]
 shell script: |
-  p=$(printf '%s\n' "$GLINT_TEXT" | /usr/bin/head -n 1)
-  p=${p#\"}; p=${p%\"}; p=${p#\'}; p=${p%\'}
-  case "$p" in
-    "~"*) p="$HOME${p#\~}" ;;
-    file://*) p=${p#file://} ;;
-  esac
-  [ -d "$p" ] || p=$(/usr/bin/dirname "$p")
-  [ -d "$p" ] || { echo "No such folder: $p" >&2; exit 1; }
-  /usr/bin/open -a Terminal "$p"
+  # Use the first line that is an existing path (the action appears when any line is one).
+  target=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    p=$(printf '%s' "$line" | /usr/bin/sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    p=${p#\"}; p=${p%\"}; p=${p#\'}; p=${p%\'}
+    case "$p" in
+      "~"*) p="$HOME${p#\~}" ;;
+      file://*) p=$(/usr/bin/osascript -l JavaScript -e 'function run(a) { return decodeURIComponent(a[0].replace(/^file:\/\//, "")) }' "$p") ;;
+    esac
+    if [ -e "$p" ]; then target="$p"; break; fi
+  done
+  [ -n "$target" ] || { echo "The selection doesn't contain an existing path" >&2; exit 1; }
+  [ -d "$target" ] || target=$(/usr/bin/dirname "$target")
+  /usr/bin/open -a Terminal "$target"

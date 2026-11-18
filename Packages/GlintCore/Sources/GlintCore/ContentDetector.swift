@@ -61,7 +61,8 @@ public enum ContentDetector {
             if FileManager.default.fileExists(atPath: path) { result.paths.append(path) }
         }
 
-        if trimmed.count <= 200, Calculator.looksLikeExpression(trimmed), let value = try? Calculator.evaluate(trimmed) {
+        // Phone numbers like 555-1234 aren't subtraction.
+        if trimmed.count <= 200, result.phoneNumbers.isEmpty, Calculator.looksLikeExpression(trimmed), let value = try? Calculator.evaluate(trimmed) {
             result.mathResult = Calculator.format(value)
         }
         return result

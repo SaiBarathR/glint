@@ -9,6 +9,9 @@ public enum Calculator {
     public static func looksLikeExpression(_ s: String) -> Bool {
         let t = s.replacingOccurrences(of: " ", with: "")
         guard t.count >= 3 else { return false }
+        // Dates (2026-11-18, 10/12/2026, 18.11.2026) and times aren't arithmetic.
+        let datePatterns = [#"^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$"#, #"^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$"#]
+        if datePatterns.contains(where: { t.range(of: $0, options: .regularExpression) != nil }) { return false }
         // Must contain at least one operator between operands and one digit.
         guard t.rangeOfCharacter(from: .decimalDigits) != nil else { return false }
         let ops = CharacterSet(charactersIn: "+-*/×÷^%")
@@ -81,23 +84,20 @@ public enum Calculator {
             return value
         }
 
+        /// Unary signs bind looser than powers: -2^2 = -(2^2) = -4.
         mutating func parseFactor() throws -> Double {
-            let base = try parseUnary()
+            if let c = peek(), c == "-" || c == "+" {
+                i += 1
+                let v = try parseFactor()
+                return c == "-" ? -v : v
+            }
+            let base = try parsePrimary()
             if let c = peek(), c == "^" {
                 i += 1
-                let exp = try parseFactor() // right associative
+                let exp = try parseFactor() // right associative, may carry its own sign: 2^-1
                 return pow(base, exp)
             }
             return base
-        }
-
-        mutating func parseUnary() throws -> Double {
-            if let c = peek(), c == "-" || c == "+" {
-                i += 1
-                let v = try parseUnary()
-                return c == "-" ? -v : v
-            }
-            return try parsePrimary()
         }
 
         mutating func parsePrimary() throws -> Double {

@@ -174,6 +174,8 @@ final class PopupController {
     // MARK: Layout
 
     private func render(items: [BarItemView], style: BarStyle, animate: Bool) {
+        // A new state replaces the old one, including its auto-dismiss (callers reschedule their own).
+        dismissTimer?.invalidate()
         hoverLabel.orderOut(nil)
         if anchor == .zero {
             let m = NSEvent.mouseLocation

@@ -23,6 +23,7 @@ public struct TextStats: Equatable {
     /// Short summary shown in the bar, e.g. "12 words · 64 chars".
     public var summary: String {
         var parts = ["\(words) word\(words == 1 ? "" : "s")", "\(characters) char\(characters == 1 ? "" : "s")"]
+        if sentences > 1 { parts.append("\(sentences) sentences") }
         if lines > 1 { parts.append("\(lines) lines") }
         return parts.joined(separator: " · ")
     }

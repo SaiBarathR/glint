@@ -11,7 +11,7 @@ struct HotKeyRecorder: View {
     @StateObject private var recorder = HotKeyRecorderModel()
 
     private var label: String {
-        if recorder.isRecording { return "Press shortcut…" }
+        if recorder.isRecording { return recorder.conflict ? "Already used" : "Press shortcut…" }
         guard let combo else { return "Record Shortcut" }
         // Label the physical key with the character it types on the current layout.
         if let key = KeyLayout.label(forKeyCode: combo.keyCode) {
@@ -76,7 +76,7 @@ struct HotKeyRecorder: View {
             if recorder.isRecording {
                 recorder.stop()
             } else {
-                recorder.start { combo = $0 }
+                recorder.start(current: combo) { combo = $0 }
             }
         }
         .onDisappear { recorder.stop() }
@@ -89,6 +89,10 @@ struct HotKeyRecorder: View {
 
 final class HotKeyRecorderModel: ObservableObject {
     @Published private(set) var isRecording = false
+    /// The last key pressed while recording is already used by another shortcut.
+    @Published var conflict = false
+    /// The shortcut this recorder currently holds (re-recording it isn't a conflict).
+    var current: KeyCombo?
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
     private var onCapture: ((KeyCombo?) -> Void)?
@@ -97,8 +101,10 @@ final class HotKeyRecorderModel: ObservableObject {
     static let functionKeyCodes: Set<UInt16> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113,
                                                 106, 64, 79, 80, 90]
 
-    func start(_ handler: @escaping (KeyCombo?) -> Void) {
+    func start(current: KeyCombo? = nil, _ handler: @escaping (KeyCombo?) -> Void) {
         stop()
+        self.current = current
+        conflict = false
         onCapture = handler
         isRecording = true
         // Release existing global shortcuts so pressing one records it instead of running it.
@@ -142,6 +148,14 @@ final class HotKeyRecorderModel: ObservableObject {
             return nil
         }
         let combo = KeyCombo(keyCode: event.keyCode, modifiers: KeyCombo.ModifierFlags(rawValue: Int(mods.rawValue)))
+        // A shortcut can only do one thing: refuse one that is already assigned elsewhere.
+        let prefs = Preferences.shared
+        let inUse = (prefs.showBarHotKey == combo ? 1 : 0) + prefs.actionHotKeys.values.filter { $0 == combo }.count
+        if inUse > 0, combo != current {
+            NSSound.beep()
+            conflict = true
+            return nil
+        }
         onCapture?(combo)
         stop()
         return nil

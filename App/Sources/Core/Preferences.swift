@@ -40,6 +40,8 @@ final class Preferences: ObservableObject {
                 if launchAtLogin { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {
                 NSLog("Glint: launch at login change failed: \(error)")
+                // Show what macOS actually has (e.g. disabled under Login Items in System Settings).
+                DispatchQueue.main.async { self.launchAtLogin = SMAppService.mainApp.status == .enabled }
             }
         }
     }
@@ -168,7 +170,9 @@ final class Preferences: ObservableObject {
         return values
     }
 
-    func setOption(_ value: String, id: String, for ext: ExtensionManifest) {
+    func setOption(_ value: String, id: String, for staleExt: ExtensionManifest) {
+        // Use the extension as currently loaded: after a reload, a newly added option may be a secret.
+        let ext = ActionRegistry.shared.entry(staleExt.identifier)?.manifest ?? staleExt
         objectWillChange.send()
         if let spec = ext.options.first(where: { $0.id == id }), spec.kind == .password || spec.kind == .secret {
             Keychain.set(value, service: "dev.saibarath.glint.options", account: "\(ext.identifier).\(id)")
