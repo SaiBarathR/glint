@@ -9,12 +9,15 @@ import Carbon.HIToolbox
 /// layout. Layouts that switch while ⌘ is held ("Dvorak – QWERTY ⌘") are handled by translating with the
 /// ⌘ modifier state.
 enum KeyLayout {
-    private static var cache: (plain: [Character: UInt16], command: [Character: UInt16])?
-    private static var observer: NSObjectProtocol?
+    /// Built maps for one input source (main thread only, like every KeySender call).
+    private static var cache: (sourceID: String, plain: [Character: UInt16], command: [Character: UInt16])?
 
     /// The key code that types the same character as `usKeyCode` does on a US keyboard.
     static func translate(_ usKeyCode: UInt16, command: Bool) -> UInt16 {
         guard let ch = usCharacter(for: usKeyCode) else { return usKeyCode } // Return, arrows, F-keys: physical
+        // Digits stay on the top row: on AZERTY-like layouts they need Shift, and the only other keys typing
+        // them are on the numeric keypad, which apps treat as different keys.
+        if ch.isNumber { return usKeyCode }
         let maps = current()
         return (command ? maps.command[ch] : maps.plain[ch]) ?? maps.plain[ch] ?? usKeyCode
     }
@@ -34,26 +37,28 @@ enum KeyLayout {
 
     static func usCharacter(for code: UInt16) -> Character? { usCharacters[code] }
 
+    /// Maps for the current layout. Checked against the active input source on every call (cheap), so a
+    /// layout switch is never missed, even while notifications to Glint are suspended.
     private static func current() -> (plain: [Character: UInt16], command: [Character: UInt16]) {
-        if let cache { return cache }
-        if observer == nil {
-            observer = DistributedNotificationCenter.default().addObserver(
-                forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
-                object: nil, queue: .main) { _ in cache = nil }
-        }
-        let built = (plain: build(modifiers: 0), command: build(modifiers: UInt32(cmdKey >> 8)))
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue() else { return ([:], [:]) }
+        let id = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
+            .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String } ?? ""
+        if let cache, cache.sourceID == id { return (cache.plain, cache.command) }
+        let built = (sourceID: id, plain: build(source, modifiers: 0), command: build(source, modifiers: UInt32(cmdKey >> 8)))
         cache = built
-        return built
+        return (built.plain, built.command)
     }
 
-    private static func build(modifiers: UInt32) -> [Character: UInt16] {
-        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-              let ptr = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return [:] }
+    /// Keypad key codes (65–92): never chosen, apps treat them as different keys.
+    private static let keypadCodes = UInt16(65)...UInt16(92)
+
+    private static func build(_ source: TISInputSource, modifiers: UInt32) -> [Character: UInt16] {
+        guard let ptr = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return [:] }
         let data = Unmanaged<CFData>.fromOpaque(ptr).takeUnretainedValue() as Data
         var map: [Character: UInt16] = [:]
         data.withUnsafeBytes { raw in
             guard let layout = raw.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return }
-            for code in UInt16(0)..<UInt16(128) {
+            for code in UInt16(0)..<UInt16(128) where !keypadCodes.contains(code) {
                 var dead: UInt32 = 0
                 var length = 0
                 var chars = [UniChar](repeating: 0, count: 4)

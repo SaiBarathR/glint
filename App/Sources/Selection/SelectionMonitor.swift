@@ -135,8 +135,13 @@ final class SelectionMonitor {
 
     /// Matches the character the key types (layout-aware), with or without the ⌘-layout switch.
     static func typed(_ e: NSEvent, oneOf chars: Set<String>) -> Bool {
-        let candidates = [e.charactersIgnoringModifiers, e.characters].compactMap { $0?.lowercased() }
-        return candidates.contains { chars.contains($0) }
+        // With ⌘ held, `characters` reflects layouts that switch to QWERTY under ⌘; fall back to the plain
+        // character only when it's empty or a control character.
+        if let typed = e.characters?.lowercased(), let scalar = typed.unicodeScalars.first,
+           !CharacterSet.controlCharacters.contains(scalar) {
+            return chars.contains(typed)
+        }
+        return e.charactersIgnoringModifiers.map { chars.contains($0.lowercased()) } ?? false
     }
 
     private func handleKey(_ e: NSEvent) {

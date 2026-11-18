@@ -82,6 +82,13 @@ enum Clipboard {
     }
 
     private static func returnBorrowed() {
+        // A Glint ⌘C is in flight: its restore will re-base the change count. Decide once it has settled.
+        if copyOutstanding, borrowed != nil {
+            let work = DispatchWorkItem { returnBorrowed() }
+            restoreWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: work)
+            return
+        }
         if let s = borrowed, pb.changeCount == borrowedChangeCount { restore(s) }
         borrowed = nil
         restoreWork = nil
