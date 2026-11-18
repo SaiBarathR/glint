@@ -28,7 +28,9 @@ enum KeyLayout {
         if ch.isNumber { return (usKeyCode, false) }
         let m = current()
         if let c = (command ? m.command[ch] : nil) ?? m.plain[ch] { return (c, false) }
-        if let c = (command ? m.commandShift[ch] : nil) ?? m.shift[ch] { return (c, true) }
+        // Shift is only added for punctuation, and the plain ⇧ level wins: German "/" is ⇧7, while its ⌘⇧ level
+        // mirrors US ⌘⇧/ (Help). Letters missing from a layout fall back to the US position instead.
+        if !ch.isLetter, let c = m.shift[ch] ?? (command ? m.commandShift[ch] : nil) { return (c, true) }
         return (usKeyCode, false)
     }
 
@@ -37,7 +39,8 @@ enum KeyLayout {
         guard usCharacter(for: code) != nil else { return nil } // Return, Esc, arrows, F-keys keep their symbols
         let m = current()
         guard let ch = m.plain.first(where: { $0.value == code })?.key, !ch.isWhitespace else { return nil }
-        return String(ch).uppercased()
+        let upper = String(ch).uppercased()
+        return upper.count == 1 ? upper : String(ch) // ß stays ß, not "SS"
     }
 
     private static let usCharacters: [UInt16: Character] = {

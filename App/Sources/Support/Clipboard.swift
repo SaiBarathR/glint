@@ -70,11 +70,13 @@ enum Clipboard {
     static func borrow() {
         if borrowed == nil { borrowed = snapshot() }
         restoreWork?.cancel()
+        waitingForCopy = false
     }
 
     /// Puts the borrowed clipboard back after `delay`, unless borrowed again meanwhile or the user copied.
     static func scheduleReturn(after delay: TimeInterval = 0.6) {
         restoreWork?.cancel()
+        waitingForCopy = false
         borrowedChangeCount = pb.changeCount
         let work = DispatchWorkItem { returnBorrowed() }
         restoreWork = work
@@ -106,6 +108,7 @@ enum Clipboard {
     /// Drop a pending return (the user now wants the new content to stay on the clipboard).
     static func keepCurrent() {
         restoreWork?.cancel()
+        waitingForCopy = false
         restoreWork = nil
         borrowed = nil
     }
