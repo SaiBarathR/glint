@@ -150,17 +150,18 @@ enum AX {
     }
 
     /// Reads the enabled state of the app's ⌘X / ⌘C / ⌘V / ⌘B menu items.
+    /// ⌘B often lives in a Format › Font (or Style) submenu, so those submenus are searched one level deeper.
     static func menuCommands(pid: pid_t) -> MenuCommands {
         let appEl = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appEl, 0.25)
         var result = MenuCommands()
         guard let bar = element(appEl, kAXMenuBarAttribute) else { return result }
-        for top in children(bar).dropFirst() { // skip the Apple menu
-            for menu in children(top) {
-                for item in children(menu) {
-                    guard let char = string(item, kAXMenuItemCmdCharAttribute)?.uppercased(), char.count == 1 else { continue }
-                    let mods = (attribute(item, kAXMenuItemCmdModifiersAttribute) as? Int) ?? 0
-                    guard mods == 0 else { continue } // 0 = ⌘ only
+        let submenuTitles: Set<String> = ["font", "style", "text", "format", "formatting", "schrift", "police", "fuente", "stil"]
+
+        func scan(_ menu: AXUIElement, depth: Int) {
+            for item in children(menu) {
+                if let char = string(item, kAXMenuItemCmdCharAttribute)?.uppercased(), char.count == 1,
+                   ((attribute(item, kAXMenuItemCmdModifiersAttribute) as? Int) ?? 0) == 0 {
                     let enabled = (attribute(item, kAXEnabledAttribute) as? Bool) ?? false
                     switch char {
                     case "X": result.cut = enabled
@@ -169,8 +170,15 @@ enum AX {
                     case "B": result.bold = enabled
                     default: break
                     }
+                } else if depth < 2, result.bold == nil,
+                          let title = string(item, kAXTitleAttribute)?.lowercased(), submenuTitles.contains(title) {
+                    for sub in children(item) { scan(sub, depth: depth + 1) }
                 }
             }
+        }
+
+        for top in children(bar).dropFirst() { // skip the Apple menu
+            for menu in children(top) { scan(menu, depth: 0) }
             if result.cut != nil, result.copy != nil, result.paste != nil, result.bold != nil { break }
         }
         return result
