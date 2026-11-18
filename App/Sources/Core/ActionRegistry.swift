@@ -149,7 +149,7 @@ final class ActionRegistry: ObservableObject {
     private let prefs = Preferences.shared
 
     /// Bundled extensions enabled by default (the rest start disabled, ready to switch on).
-    static let defaultEnabledBundled: Set<String> = ["dev.saibarath.glint.translate", "dev.saibarath.glint.change-case"]
+    static let defaultEnabledBundled: Set<String> = ["dev.saibarath.glint.translate"]
 
     static var userExtensionsDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

@@ -106,15 +106,20 @@ enum ActionBuilder {
 }
 
 enum Spelling {
+    /// Short words make automatic language detection unreliable, so check against the user's spelling language.
+    private static var language: String { NSSpellChecker.shared.language() }
+
     static func isMisspelled(_ word: String) -> Bool {
         guard word.rangeOfCharacter(from: .letters) != nil, word.rangeOfCharacter(from: .decimalDigits) == nil else { return false }
-        let range = NSSpellChecker.shared.checkSpelling(of: word, startingAt: 0)
+        var count = 0
+        let range = NSSpellChecker.shared.checkSpelling(of: word, startingAt: 0, language: language, wrap: false,
+                                                        inSpellDocumentWithTag: 0, wordCount: &count)
         return range.location != NSNotFound
     }
 
     static func guesses(for word: String) -> [String] {
         let range = NSRange(location: 0, length: (word as NSString).length)
-        return Array((NSSpellChecker.shared.guesses(forWordRange: range, in: word, language: nil,
+        return Array((NSSpellChecker.shared.guesses(forWordRange: range, in: word, language: language,
                                                     inSpellDocumentWithTag: 0) ?? []).prefix(6))
     }
 }

@@ -61,7 +61,7 @@ Hold a modifier while clicking an action to change what it does:
 
 ## Bundled extensions
 
-Glint ships with these extensions. **Translate** and **Change Case** are on by default. Turn on the others
+Glint ships with these extensions. **Translate** is on by default. Turn on the others
 in **Settings → Actions**.
 
 | Extension | Kind | What it does |
