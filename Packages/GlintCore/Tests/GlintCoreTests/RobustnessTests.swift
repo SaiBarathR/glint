@@ -366,3 +366,15 @@ final class ReviewRoundThirteenTests: XCTestCase {
         }
     }
 }
+
+final class ReviewRoundFourteenTests: XCTestCase {
+    func testCalculatorEdgeCases() {
+        XCTAssertNil(ContentDetector.detect(in: "0x20 - 0x10").mathResult)
+        XCTAssertNil(ContentDetector.detect(in: "0x1000 * 4").mathResult)
+        XCTAssertNil(ContentDetector.detect(in: "(2019)").mathResult)
+        XCTAssertNil(ContentDetector.detect(in: "(3)").mathResult)
+        XCTAssertEqual(ContentDetector.detect(in: "-5 * 0").mathResult, "0")
+        XCTAssertEqual(ContentDetector.detect(in: "sqrt(16)").mathResult, "4")
+        XCTAssertEqual(ContentDetector.detect(in: "(2+3)*4").mathResult, "20")
+    }
+}

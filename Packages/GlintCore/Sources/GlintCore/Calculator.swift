@@ -9,13 +9,17 @@ public enum Calculator {
     public static func looksLikeExpression(_ s: String) -> Bool {
         let t = s.replacingOccurrences(of: " ", with: "")
         guard t.count >= 3 else { return false }
+        // Hex literals (0x20) aren't decimal arithmetic.
+        if t.range(of: #"(?<![\d.])0[xX][0-9a-fA-F]"#, options: .regularExpression) != nil { return false }
         // Dates (2026-11-18, 10/12/2026, 18.11.2026) and times aren't arithmetic.
         let datePatterns = [#"^\d{4}([-/.])\d{1,2}\1\d{1,2}$"#, #"^\d{1,2}([-/.])\d{1,2}\1\d{2,4}$"#]
         if datePatterns.contains(where: { t.range(of: $0, options: .regularExpression) != nil }) { return false }
         // Must contain at least one operator between operands and one digit.
         guard t.rangeOfCharacter(from: .decimalDigits) != nil else { return false }
         let ops = CharacterSet(charactersIn: "+-*/×÷^%")
-        guard t.dropFirst().rangeOfCharacter(from: ops) != nil || t.contains("(") else { return false }
+        // Needs a real operator after the first character, or a function call like sqrt(2); "(2019)" is not math.
+        let hasFunctionCall = t.range(of: #"[A-Za-z]\("#, options: .regularExpression) != nil
+        guard t.dropFirst().rangeOfCharacter(from: ops) != nil || hasFunctionCall else { return false }
         let allowed = CharacterSet(charactersIn: "0123456789.,+-*/×÷^%() =").union(.letters)
         guard t.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { return false }
         // Letters only allowed when they form known function or constant names.
@@ -39,6 +43,7 @@ public enum Calculator {
     }
 
     public static func format(_ value: Double) -> String {
+        if value == 0 { return "0" } // never "-0"
         if value == value.rounded(), abs(value) < 1e15 { return String(format: "%.0f", value) }
         let f = NumberFormatter()
         f.numberStyle = .decimal
