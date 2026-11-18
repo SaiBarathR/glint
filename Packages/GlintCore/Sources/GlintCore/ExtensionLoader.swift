@@ -28,7 +28,8 @@ public enum ExtensionLoader {
             var manifest = try ManifestParser.parse(dict, bundleURL: url, isBuiltIn: isBuiltIn)
             // `module: file.js` in a static config: the module supplies the actions.
             if manifest.actions.isEmpty, let source = manifest.moduleSource {
-                var module = try loadJavaScriptModule(source: source, bundleURL: url, isBuiltIn: isBuiltIn, headerConfig: dict)
+                var module = try loadJavaScriptModule(source: source, bundleURL: url, isBuiltIn: isBuiltIn, headerConfig: dict,
+                                                      moduleDir: manifest.moduleDir)
                 if module.options.isEmpty { module.options = manifest.options }
                 manifest = module
             }
@@ -68,8 +69,9 @@ public enum ExtensionLoader {
     /// A Config.js module: the whole extension is defined in JavaScript (`module.exports = { name, actions }`).
     /// The static parts (name, icon, options) are read by evaluating the module once.
     public static func loadJavaScriptModule(source: String, bundleURL: URL?, isBuiltIn: Bool,
-                                            snippetSource: String? = nil, headerConfig: [String: Any] = [:]) throws -> ExtensionManifest {
-        let info = JavaScriptRunner.describeModule(source: source, bundleURL: bundleURL)
+                                            snippetSource: String? = nil, headerConfig: [String: Any] = [:],
+                                            moduleDir: String = "") throws -> ExtensionManifest {
+        let info = JavaScriptRunner.describeModule(source: source, bundleURL: bundleURL, entryDir: moduleDir)
         var dict = headerConfig
         for (k, v) in info.config where dict[k] == nil { dict[k] = v }
         if dict["name"] == nil { dict["name"] = bundleURL?.deletingPathExtension().lastPathComponent ?? "JavaScript Extension" }
@@ -108,10 +110,12 @@ public enum ExtensionLoader {
         if actions.isEmpty { throw ManifestError.noActions }
         let options = (c.dicts("options") ?? []).compactMap { OptionSpec(config: ConfigDict($0)) }
         let identifier = c.string("identifier") ?? ManifestParser.derivedIdentifier(name: name)
-        return ExtensionManifest(identifier: identifier, name: name, icon: icon, description: c.string("description"),
+        var manifest = ExtensionManifest(identifier: identifier, name: name, icon: icon, description: c.string("description"),
                                  author: c.string("author"), homepage: c.string("homepage"), options: options,
                                  actions: actions, moduleSource: source, bundleURL: bundleURL,
                                  snippetSource: snippetSource, isBuiltIn: isBuiltIn)
+        manifest.moduleDir = moduleDir
+        return manifest
     }
 
     private static func nonEmpty(_ a: [String]) -> [String]? { a.isEmpty ? nil : a }

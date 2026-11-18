@@ -176,6 +176,8 @@ public struct ExtensionManifest: Equatable, Identifiable {
     public var actions: [ActionSpec]
     /// JavaScript module source (for `exports.actions` style extensions).
     public var moduleSource: String?
+    /// Bundle-relative folder of the module file (`module: src/main.js` → "src").
+    public var moduleDir: String = ""
     /// Folder the extension was loaded from (nil for built-ins / snippets not yet installed).
     public var bundleURL: URL?
     /// The file or folder on disk that holds this extension (what uninstall removes).
@@ -228,9 +230,11 @@ public enum ManifestParser {
         let options = (c.dicts("options") ?? []).compactMap { OptionSpec(config: ConfigDict($0)) }
 
         var moduleSource: String?
+        var moduleDir = ""
         if let module = c.string("module") {
             if let bundleURL, let src = try? String(contentsOf: bundleURL.appendingPathComponent(module), encoding: .utf8) {
                 moduleSource = src
+                moduleDir = (module as NSString).deletingLastPathComponent
             } else if inlineCode != nil, normalizeKey(module) == "true" || module.isEmpty {
                 moduleSource = inlineCode
             }
@@ -258,11 +262,13 @@ public enum ManifestParser {
         }
         if actions.isEmpty && moduleSource == nil { throw ManifestError.noActions }
 
-        return ExtensionManifest(identifier: identifier, name: name, icon: icon,
+        var manifest = ExtensionManifest(identifier: identifier, name: name, icon: icon,
                                  description: c.string("description", "extension description"),
                                  author: c.string("author", "credits"), homepage: c.string("homepage", "app link", "link"),
                                  options: options, actions: actions, moduleSource: moduleSource, bundleURL: bundleURL,
                                  snippetSource: snippetSource, isBuiltIn: isBuiltIn)
+        manifest.moduleDir = moduleDir
+        return manifest
     }
 
     static func derivedIdentifier(name: String) -> String {

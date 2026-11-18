@@ -19,11 +19,14 @@ public enum JavaScriptRunner {
         public var optionSpecs: [OptionSpec]
         public var extensionID: String
         public var bundleURL: URL?
+        /// Bundle-relative folder of the script being run, so its `require('./x')` resolves next to it.
+        public var entryDir: String
 
         public init(input: ActionInput, context: SelectionContext, modifiers: ModifierState, options: [String: String],
-                    optionSpecs: [OptionSpec] = [], extensionID: String, bundleURL: URL?) {
+                    optionSpecs: [OptionSpec] = [], extensionID: String, bundleURL: URL?, entryDir: String = "") {
             self.input = input; self.context = context; self.modifiers = modifiers; self.options = options
             self.optionSpecs = optionSpecs; self.extensionID = extensionID; self.bundleURL = bundleURL
+            self.entryDir = entryDir
         }
     }
 
@@ -65,19 +68,23 @@ public enum JavaScriptRunner {
     };
     function setTimeout(fn, ms) { __native.setTimeout(fn, ms || 0); return 0; }
     function sleep(ms) { return util.sleep(ms); }
-    // Each module gets a require() that resolves relative to its own folder (inside the extension).
+    // Each module gets a require() that resolves relative to its own folder (inside the extension). Modules are
+    // cached by path and registered before they run, like Node: shared files load once, cycles terminate.
+    var __moduleCache = {};
     function __makeRequire(baseDir) {
       return function require(path) {
         if (path === 'axios') { return __axios; }
         var r = __native.readModule(String(path), baseDir);
         if (r === null || r === undefined) { throw new Error('Cannot find module ' + path); }
-        if (r.json) { return JSON.parse(r.source); }
+        if (__moduleCache[r.path]) { return __moduleCache[r.path].exports; }
+        if (r.json) { var data = { exports: JSON.parse(r.source) }; __moduleCache[r.path] = data; return data.exports; }
         var m = { exports: {} };
+        __moduleCache[r.path] = m;
         (new Function('module', 'exports', 'require', r.source))(m, m.exports, __makeRequire(r.dir));
         return m.exports;
       };
     }
-    var require = __makeRequire('');
+    var require = __makeRequire(typeof __entryDir === 'string' ? __entryDir : '');
     function fetch(url, init) {
       init = init || {};
       return __native.fetch(String(url), String(init.method || 'GET'), init.headers || {},
@@ -148,7 +155,7 @@ public enum JavaScriptRunner {
     ///   having asked for an action (describing a module before install, building the bar).
     static func makeContext(env: Environment?, host liveHost: ActionHost?, errors: Box<String?>, timeLimit: Double = 30,
                             sandboxed: Bool = false, expired: Box<Bool> = Box(false),
-                            bundleURL explicitBundleURL: URL? = nil) -> JSContext {
+                            bundleURL explicitBundleURL: URL? = nil, entryDir explicitEntryDir: String = "") -> JSContext {
         // Once the action has timed out, late continuations (e.g. a fetch resolving) must not reach the host.
         var host: ActionHost? { expired.value ? nil : liveHost }
         let allowSleep = !sandboxed
@@ -240,7 +247,8 @@ public enum JavaScriptRunner {
             guard resolved.path.hasPrefix(root), let src = try? String(contentsOf: resolved, encoding: .utf8) else { return null }
             let dir = String(resolved.deletingLastPathComponent().path.dropFirst(rootURL.path.count))
                 .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            return JSValue(object: ["source": src, "dir": dir, "json": resolved.pathExtension.lowercased() == "json"],
+            return JSValue(object: ["source": src, "dir": dir, "path": resolved.path,
+                                    "json": resolved.pathExtension.lowercased() == "json"],
                            in: JSContext.current())
         }
         let fetch: @convention(block) (String, String, JSValue, JSValue) -> JSValue = { urlString, method, headers, body in
@@ -283,6 +291,7 @@ public enum JavaScriptRunner {
         for (name, block) in natives { native.setObject(block, forKeyedSubscript: name as NSString) }
         ctx.setObject(native, forKeyedSubscript: "__native" as NSString)
         ctx.setObject(envObject(env), forKeyedSubscript: "__env" as NSString)
+        ctx.setObject(env?.entryDir ?? explicitEntryDir, forKeyedSubscript: "__entryDir" as NSString)
         ctx.evaluateScript(prelude)
         return ctx
     }
@@ -316,9 +325,10 @@ public enum JavaScriptRunner {
 
     // MARK: - Module description
 
-    public static func describeModule(source: String, bundleURL: URL? = nil) -> ModuleInfo {
+    public static func describeModule(source: String, bundleURL: URL? = nil, entryDir: String = "") -> ModuleInfo {
         let errors = Box<String?>(nil)
-        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 1, sandboxed: true, bundleURL: bundleURL)
+        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 1, sandboxed: true, bundleURL: bundleURL,
+                              entryDir: entryDir)
         ctx.evaluateScript(source)
         var info = ModuleInfo()
         let exports = moduleExports(ctx)

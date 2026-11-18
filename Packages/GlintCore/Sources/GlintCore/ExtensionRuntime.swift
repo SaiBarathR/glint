@@ -67,7 +67,7 @@ public final class ExtensionRuntime {
             guard let source = manifest.moduleSource else { return .failure("Missing JavaScript module") }
             let env = JavaScriptRunner.Environment(input: input, context: context, modifiers: modifiers, options: options,
                                                    optionSpecs: manifest.options, extensionID: manifest.identifier,
-                                                   bundleURL: manifest.bundleURL)
+                                                   bundleURL: manifest.bundleURL, entryDir: manifest.moduleDir)
             return await JavaScriptRunner.run(.module(source: source, actionIndex: index), env: env, host: host,
                                               dynamicIndex: dynamicIndex, dynamicTitle: dynamicIndex != nil ? action.title : nil)
 
@@ -105,9 +105,13 @@ public final class ExtensionRuntime {
             var src = source
             if let file { src = try? String(contentsOf: file, encoding: .utf8) }
             guard let src else { return .failure("Couldn't read script") }
+            // Requires in a script file resolve next to it.
+            let entryDir = file.flatMap { f in manifest.bundleURL.map { b in
+                String(f.deletingLastPathComponent().standardizedFileURL.path.dropFirst(b.standardizedFileURL.path.count))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/")) } } ?? ""
             let env = JavaScriptRunner.Environment(input: input, context: context, modifiers: modifiers, options: options,
                                                    optionSpecs: manifest.options, extensionID: manifest.identifier,
-                                                   bundleURL: manifest.bundleURL)
+                                                   bundleURL: manifest.bundleURL, entryDir: entryDir)
             // A file that defines exports is a module with a single action.
             if file != nil, src.contains("exports.") || src.contains("module.exports") {
                 return await JavaScriptRunner.run(.module(source: src, actionIndex: 0), env: env, host: host)
@@ -194,7 +198,7 @@ public final class ExtensionRuntime {
         guard let source = manifest.moduleSource else { return [] }
         let env = JavaScriptRunner.Environment(input: input, context: context, modifiers: modifiers, options: options,
                                                optionSpecs: manifest.options, extensionID: manifest.identifier,
-                                               bundleURL: manifest.bundleURL)
+                                               bundleURL: manifest.bundleURL, entryDir: manifest.moduleDir)
         // The placeholder carries the module-level settings that every dynamic action inherits.
         let parent = manifest.actions.first { $0.kind == .jsModuleAction(index: -1) }
         return JavaScriptRunner.populate(moduleSource: source, env: env).enumerated().map { i, d in

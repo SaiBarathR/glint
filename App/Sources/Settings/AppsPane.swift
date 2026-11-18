@@ -167,7 +167,8 @@ struct AppsPane: View {
     }
 
     private func add(_ ids: [String]) {
-        let new = ids.filter { !prefs.excludedApps.contains($0) }
+        var seen = Set(prefs.excludedApps)
+        let new = ids.filter { seen.insert($0).inserted } // also drops duplicates within the incoming list
         guard !new.isEmpty else { return }
         prefs.excludedApps.append(contentsOf: new)
         selection = Set(new)

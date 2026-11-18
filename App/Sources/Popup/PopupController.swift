@@ -15,6 +15,7 @@ final class PopupController {
     private var dismissTimer: Timer?
     /// Set while a self-dismissing result is shown, so hovering can pause it.
     private var resultDismissDelay: TimeInterval?
+    private var pausedRemaining: TimeInterval?
     private var shownAt = Date.distantPast
     private(set) var isVisible = false
     /// Called when an action button is clicked.
@@ -42,7 +43,8 @@ final class PopupController {
 
     func showResult(_ text: String, preview: Bool) {
         let style = BarStyle.current()
-        var item = BarItem(kind: .label(text), tooltip: preview ? "Click to copy" : (text.count > 60 ? text : nil))
+        // Hovering a cut-off result shows all of it (plus the hint for previews).
+        var item = BarItem(kind: .label(text), tooltip: preview ? text + "\n\nClick to copy" : text)
         if preview {
             item.handler = { [weak self] _ in
                 Clipboard.copy(text)
@@ -183,6 +185,7 @@ final class PopupController {
         // A new state replaces the old one, including its auto-dismiss (callers reschedule their own).
         dismissTimer?.invalidate()
         resultDismissDelay = nil
+        pausedRemaining = nil
         hoverLabel.orderOut(nil)
         if anchor == .zero {
             let m = NSEvent.mouseLocation
@@ -236,12 +239,17 @@ final class PopupController {
     }
 
     private func hoverChanged(_ v: BarItemView, inside: Bool, style: BarStyle) {
+        // Keep a result on screen while the pointer is over it; resume the remaining time when it leaves.
+        if resultDismissDelay != nil {
+            if inside {
+                pausedRemaining = max(0, (dismissTimer?.fireDate.timeIntervalSinceNow) ?? 0)
+                dismissTimer?.invalidate()
+            } else {
+                scheduleDismiss(after: max(pausedRemaining ?? 0, 2.5))
+            }
+        }
         guard Preferences.shared.showHoverLabels else { return }
         // Show for icon-only items, truncated titles, and hints that differ from the visible text.
-        // Keep a result on screen while the pointer is over it; resume the countdown when it leaves.
-        if let pending = resultDismissDelay {
-            if inside { dismissTimer?.invalidate() } else { scheduleDismiss(after: min(pending, 2.5)) }
-        }
         guard inside, let tip = v.item.tooltip, v.item.handler != nil || v.isTruncated,
               !v.showsTitle || v.isTruncated || tip != v.visibleTitle else {
             hoverLabel.orderOut(nil)

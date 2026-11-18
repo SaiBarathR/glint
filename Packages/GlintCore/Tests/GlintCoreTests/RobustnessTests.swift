@@ -455,3 +455,32 @@ final class ReviewRoundSeventeenTests: XCTestCase {
         XCTAssertEqual(Calculator.format(1e13 + 0.3), "10000000000000.3")
     }
 }
+
+final class ReviewRoundEighteenTests: XCTestCase {
+    func testEntryDirCacheAndCycles() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let bundle = dir.appendingPathComponent("Src.glintext")
+        try fm.createDirectory(at: bundle.appendingPathComponent("src"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        func w(_ p: String, _ s: String) throws { try s.write(to: bundle.appendingPathComponent(p), atomically: true, encoding: .utf8) }
+        try w("Config.yaml", "name: Src\nidentifier: t.src\nmodule: src/main.js\n")
+        try w("src/state.js", "exports.n = 0;")
+        try w("src/a.js", "var b = require('./b'); var s = require('./state'); s.n++; exports.fromA = function() { return 'a' + b.name; }; exports.name = 'A';")
+        try w("src/b.js", "var a = require('./a'); var s = require('./state'); s.n++; exports.name = 'B';")
+        try w("src/main.js", """
+        var a = require('./a'); var s = require('./state');
+        exports.actions = [{ title: 'Run', code: function() { return a.fromA() + s.n; } }];
+        """)
+        let m = try ExtensionLoader.loadBundle(at: bundle)
+        XCTAssertEqual(m.actions.map(\.title), ["Run"])
+        let exp = expectation(description: "run")
+        Task {
+            let out = await ExtensionRuntime(host: nil).perform(m.actions[0], of: m, input: ActionInput(text: "x"),
+                                                                context: SelectionContext(text: "x"), modifiers: [], options: [:])
+            XCTAssertEqual(out, .result("aB2")) // one shared state module, cycle a↔b terminates
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 10)
+    }
+}

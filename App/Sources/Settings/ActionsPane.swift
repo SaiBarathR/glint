@@ -170,7 +170,7 @@ struct ActionsPane: View {
     private func installFromFile() {
         let panel = NSOpenPanel()
         panel.title = "Install Extension"
-        panel.message = "Choose a .glintext or .popclipext extension."
+        panel.message = "Choose a Glint or PopClip extension (.glintext, .popclipext, or a zipped .glintextz / .popclipextz)."
         panel.prompt = "Install"
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
@@ -190,12 +190,16 @@ struct ActionsPane: View {
     private func install(urls: [URL]) {
         var failures: [String] = []
         var lastInstalled: String?
-        for url in urls {
-            guard ExtensionLoader.bundleExtensions.contains(url.pathExtension.lowercased()) else {
-                failures.append("“\(url.lastPathComponent)” isn't a .glintext or .popclipext extension.")
+        for original in urls {
+            var url = original
+            let ext = url.pathExtension.lowercased()
+            let zipped = ["glintextz", "popclipextz", "zip"].contains(ext)
+            guard ExtensionLoader.bundleExtensions.contains(ext) || zipped else {
+                failures.append("“\(url.lastPathComponent)” isn't a Glint or PopClip extension.")
                 continue
             }
             do {
+                if zipped { url = try AppDelegate.unzipExtension(url) }
                 lastInstalled = try registry.install(bundleAt: url).identifier
             } catch {
                 failures.append("“\(url.lastPathComponent)”: \(error.localizedDescription)")

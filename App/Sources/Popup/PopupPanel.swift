@@ -131,6 +131,7 @@ final class HoverLabelPanel: NSPanel {
         field.font = .systemFont(ofSize: 11.5, weight: .medium)
         field.lineBreakMode = .byWordWrapping
         field.maximumNumberOfLines = 12
+        field.cell?.truncatesLastVisibleLine = true // "…" when there's more than fits
         box.addSubview(field)
         contentView = box
     }
