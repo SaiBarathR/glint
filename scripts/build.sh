@@ -7,8 +7,8 @@ cd "$(dirname "$0")/.."
 command -v xcodegen >/dev/null || { echo "Install XcodeGen first: brew install xcodegen"; exit 1; }
 xcodegen generate -q
 xcodebuild -project Glint.xcodeproj -scheme Glint -configuration Release -derivedDataPath build/Release \
-  build | xcbeautify 2>/dev/null || xcodebuild -project Glint.xcodeproj -scheme Glint -configuration Release \
-  -derivedDataPath build/Release build -quiet
+  -destination 'platform=macOS' build -quiet 2>&1 | grep -v "Using the first of multiple matching destinations" || true
+test -d build/Release/Build/Products/Release/Glint.app || { echo "Build failed"; exit 1; }
 rm -rf dist && mkdir -p dist
 cp -R build/Release/Build/Products/Release/Glint.app dist/
 ditto -c -k --keepParent dist/Glint.app dist/Glint.zip
