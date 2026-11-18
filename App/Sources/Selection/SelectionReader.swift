@@ -21,8 +21,14 @@ enum SelectionReader {
     static func capture(mouse: CGPoint?, allowCopyFallback: Bool, pasteOnly: Bool = false,
                         requireNearMouse: Bool = false) async -> CapturedSelection? {
         let prefs = Preferences.shared
-        guard let app = NSWorkspace.shared.frontmostApplication, app.bundleIdentifier != ownBundleID else { return nil }
+        guard var app = NSWorkspace.shared.frontmostApplication, app.bundleIdentifier != ownBundleID else { return nil }
         if prefs.isExcluded(bundleID: app.bundleIdentifier) { return nil }
+        // The focused element can belong to another process (Spotlight, launcher panels): use its owner.
+        if let el = AX.focusedElement(), let ownerPID = AX.pid(el), ownerPID != app.processIdentifier,
+           let owner = NSRunningApplication(processIdentifier: ownerPID) {
+            if owner.bundleIdentifier == ownBundleID || prefs.isExcluded(bundleID: owner.bundleIdentifier) { return nil }
+            app = owner
+        }
 
         let pid = app.processIdentifier
         let (axText, element, editable, secure, bounds, docURL, nativeText) = await Task.detached(priority: .userInitiated) {

@@ -139,3 +139,45 @@ final class ReviewRoundOneTests: XCTestCase {
         if case .failure(let e) = r { XCTAssertTrue(e.message.contains("boom"), e.message) } else { XCTFail() }
     }
 }
+
+final class ReviewRoundTwoTests: XCTestCase {
+    func testHugeRegexGroupsStayWithinEnvironmentLimit() async throws {
+        let m = try ExtensionLoader.parseSnippet("#glint\nname: G\nregex: '(?s)^(.*)$'\nshell script: wc -c | tr -d ' '\nafter: copy-result")
+        let text = String(repeating: "漢", count: 100_000)
+        let host = MockHost()
+        let ctx = SelectionContext(text: text)
+        let input = RequirementEvaluator.evaluate(m.actions[0], context: ctx)!
+        let out = await ExtensionRuntime(host: host).perform(m.actions[0], of: m, input: input, context: ctx,
+                                                             modifiers: [], options: [:])
+        XCTAssertEqual(out, .result("300000"))
+    }
+
+    func testSleepLoopHitsWallClockDeadline() async {
+        let env = JavaScriptRunner.Environment(input: ActionInput(text: "a"), context: SelectionContext(text: "a"),
+                                               modifiers: [], options: [:], extensionID: "t", bundleURL: nil)
+        let start = Date()
+        let out = await JavaScriptRunner.run(.inline("var n = 0; while (true) { sleep(200); n++; }"), env: env, host: nil, timeout: 1)
+        if case .failure = out {} else { XCTFail("expected failure, got \(out)") }
+        XCTAssertLessThan(Date().timeIntervalSince(start), 4)
+    }
+
+    final class Sink { var copied: [String] = [] }
+    final class SinkHost: MockHost {
+        let sink: Sink
+        init(_ sink: Sink) { self.sink = sink }
+        override func copyText(_ text: String) { sink.copied.append(text) }
+    }
+
+    func testLateCallbackStillReachesHost() async throws {
+        let sink = Sink()
+        let env = JavaScriptRunner.Environment(input: ActionInput(text: "a"), context: SelectionContext(text: "a"),
+                                               modifiers: [], options: [:], extensionID: "t", bundleURL: nil)
+        do {
+            // The only strong reference to this host is the one the running action holds.
+            let scoped = SinkHost(sink)
+            _ = await JavaScriptRunner.run(.inline("setTimeout(function() { glint.copyText('late'); }, 100);"), env: env, host: scoped)
+        }
+        try await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertEqual(sink.copied, ["late"])
+    }
+}

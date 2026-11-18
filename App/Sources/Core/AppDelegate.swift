@@ -206,6 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     func selectionMonitorShouldDismiss(_ monitor: SelectionMonitor, reason: SelectionMonitor.DismissReason) {
         // Any new input means the user moved on: drop a capture that hasn't shown its bar yet.
         pendingCapture?.cancel()
+        if reason != .scroll { performer.endSession() }
         popup.dismiss()
     }
 

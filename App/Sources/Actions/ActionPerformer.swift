@@ -9,6 +9,9 @@ final class ActionPerformer: ActionHost {
     /// The selection the bar was shown for. Each new selection starts a new session.
     var selection: CapturedSelection? { didSet { session &+= 1 } }
     private(set) var session = 0
+
+    /// The user moved on (clicked, typed, switched apps): results of running actions must not land anymore.
+    func endSession() { session &+= 1 }
     private(set) var log: [String] = []
 
     func perform(_ action: BarAction, flags: NSEvent.ModifierFlags) {

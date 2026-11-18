@@ -246,12 +246,19 @@ final class ActionRegistry: ObservableObject {
     /// Copies an extension package (.glintext / .popclipext folder) into the user directory.
     @discardableResult
     func install(bundleAt url: URL) throws -> ExtensionManifest {
-        let manifest = try ExtensionLoader.loadBundle(at: url)
+        _ = try ExtensionLoader.loadBundle(at: url) // validate before touching anything
         let fm = FileManager.default
         let dest = Self.userExtensionsDirectory.appendingPathComponent(url.lastPathComponent, isDirectory: true)
-        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-        try fm.copyItem(at: url, to: dest)
-        _ = manifest
+        if dest.standardizedFileURL.resolvingSymlinksInPath() != url.standardizedFileURL.resolvingSymlinksInPath() {
+            // Copy beside the destination first, then swap, so a failed copy never loses the installed version.
+            let staging = Self.userExtensionsDirectory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
+            try fm.copyItem(at: url, to: staging)
+            if fm.fileExists(atPath: dest.path) {
+                _ = try fm.replaceItemAt(dest, withItemAt: staging)
+            } else {
+                try fm.moveItem(at: staging, to: dest)
+            }
+        }
         let installed = try ExtensionLoader.loadBundle(at: dest)
         finishInstall(installed)
         return installed

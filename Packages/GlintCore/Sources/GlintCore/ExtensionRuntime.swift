@@ -137,9 +137,18 @@ public final class ExtensionRuntime {
             "HTML": capped(input.html ?? ""),
             "MARKDOWN": capped(input.text),
         ]
-        for (i, g) in input.regexGroups.enumerated() { base["REGEX_GROUP_\(i)"] = g }
+        base["URLS"] = capped(base["URLS"] ?? "")
+        for (i, g) in input.regexGroups.enumerated() { base["REGEX_GROUP_\(i)"] = capped(g) }
         for (k, v) in options {
-            base["OPTION_" + k.uppercased().map { $0.isLetter || $0.isNumber ? $0 : "_" }.map(String.init).joined()] = v
+            base["OPTION_" + k.uppercased().map { $0.isLetter || $0.isNumber ? $0 : "_" }.map(String.init).joined()] = capped(v)
+        }
+        // Overall budget (each value is exported twice): blank the largest values until it fits.
+        let budget = 384 * 1024
+        var total = base.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count + 16 } * 2
+        for (k, v) in base.sorted(by: { $0.value.utf8.count > $1.value.utf8.count }) where total > budget {
+            total -= v.utf8.count * 2
+            base[k] = ""
+            if k == "TEXT" { base["TEXT_TRUNCATED"] = "1" }
         }
         var env: [String: String] = [:]
         for (k, v) in base {

@@ -74,7 +74,6 @@ final class SelectionMonitor {
         let point = NSEvent.mouseLocation
         switch e.type {
         case .leftMouseDown:
-            Clipboard.noteActivity()
             delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
             downPoint = point
             downTime = Date()
@@ -117,7 +116,6 @@ final class SelectionMonitor {
             }
             if let trigger { delegate?.selectionMonitor(self, didDetect: trigger, at: point, iBeam: downIBeam) }
         case .rightMouseDown, .otherMouseDown:
-            Clipboard.noteActivity()
             delegate?.selectionMonitorShouldDismiss(self, reason: .mouseDown)
         case .scrollWheel:
             if abs(e.scrollingDeltaY) > 2 || abs(e.scrollingDeltaX) > 2 {
@@ -136,7 +134,9 @@ final class SelectionMonitor {
         case .flagsChanged:
             delegate?.selectionMonitor(self, modifiersChanged: e.modifierFlags)
         case .keyDown:
-            Clipboard.noteActivity()
+            if e.modifierFlags.contains(.command), (e.keyCode == UInt16(kVK_ANSI_C) || e.keyCode == UInt16(kVK_ANSI_X)) {
+                Clipboard.noteUserCopy()
+            }
             delegate?.selectionMonitorShouldDismiss(self, reason: .key)
             keyboardTimer?.invalidate()
         case .keyUp:

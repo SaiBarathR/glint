@@ -31,10 +31,10 @@ enum Clipboard {
 
     static var string: String? { pb.string(forType: .string) }
 
-    /// Bumped whenever Glint writes the clipboard or the user does anything (key, click). A late-⌘C
-    /// watcher only restores while the generation is unchanged, so it never undoes the user's own copy.
+    /// Bumped whenever Glint writes the clipboard or the user presses ⌘C / ⌘X. A late-⌘C watcher only
+    /// restores while the generation is unchanged, so it never undoes the user's own copy.
     static var generation = 0
-    static func noteActivity() { generation &+= 1 }
+    static func noteUserCopy() { generation &+= 1 }
 
     static func setString(_ s: String) {
         generation &+= 1
@@ -72,6 +72,15 @@ enum Clipboard {
         setString(s)
     }
 
+    /// Puts a borrowed clipboard back right away (before reading the clipboard for something else).
+    static func flushPendingReturn() {
+        guard let work = restoreWork else { return }
+        work.cancel()
+        if let s = borrowed { restore(s) }
+        borrowed = nil
+        restoreWork = nil
+    }
+
     /// Drop a pending return (the user now wants the new content to stay on the clipboard).
     static func keepCurrent() {
         restoreWork?.cancel()
@@ -84,7 +93,10 @@ enum Clipboard {
     /// Reads the selection by sending ⌘C and restoring the clipboard afterwards.
     /// Returns (text, html). Nil when nothing was copied or only files were copied.
     static func copySelection(timeout: TimeInterval = 0.35) async -> (String, String?)? {
-        let before = await MainActor.run { snapshot() }
+        let before = await MainActor.run { () -> Snapshot in
+            flushPendingReturn()
+            return snapshot()
+        }
         let gen = await MainActor.run { () -> Int in
             KeySender.command(.copy)
             return generation

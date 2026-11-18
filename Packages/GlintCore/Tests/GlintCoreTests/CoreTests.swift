@@ -1,7 +1,7 @@
 import XCTest
 @testable import GlintCore
 
-final class MockHost: ActionHost {
+class MockHost: ActionHost {
     var pasted: [String] = []
     var copied: [String] = []
     var opened: [(URL, Bool)] = []

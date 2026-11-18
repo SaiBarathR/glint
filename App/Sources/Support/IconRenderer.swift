@@ -19,8 +19,10 @@ enum IconRenderer {
         cacheLock.lock()
         if let hit = cache[key] { cacheLock.unlock(); return hit }
         cacheLock.unlock()
-        let img = render(spec: spec, baseURL: baseURL, size: size, fallbackTitle: fallbackTitle)
-        if let img {
+        var usedFallback = false
+        let img = render(spec: spec, baseURL: baseURL, size: size, fallbackTitle: fallbackTitle, usedFallback: &usedFallback)
+        // Fallback initials depend on the title, which isn't in the key, so they aren't cached.
+        if let img, !usedFallback {
             cacheLock.lock()
             if cache.count > 400 { cache.removeAll() }
             cache[key] = img
@@ -29,7 +31,12 @@ enum IconRenderer {
         return img
     }
 
-    private static func render(spec rawSpec: String?, baseURL: URL?, size: CGFloat, fallbackTitle: String?) -> NSImage? {
+    private static func render(spec rawSpec: String?, baseURL: URL?, size: CGFloat, fallbackTitle: String?,
+                               usedFallback: inout Bool) -> NSImage? {
+        func fallback(_ shape: Shape, _ filled: Bool) -> NSImage {
+            usedFallback = true
+            return textIcon(initials(fallbackTitle ?? "?"), shape: shape, filled: filled, size: size)
+        }
         guard var spec = rawSpec?.trimmingCharacters(in: .whitespaces), !spec.isEmpty else {
             return fallbackTitle.map { textIcon(initials($0), shape: .none, filled: false, size: size) }
         }
@@ -50,15 +57,13 @@ enum IconRenderer {
 
         if lower.hasPrefix("symbol:") || lower.hasPrefix("sf:") {
             let name = String(spec.drop { $0 != ":" }.dropFirst()).trimmingCharacters(in: .whitespaces)
-            return (name.isEmpty ? nil : symbol(name, size: size, shape: shape, filled: filled))
-                ?? textIcon(initials(fallbackTitle ?? "?"), shape: shape, filled: filled, size: size)
+            return (name.isEmpty ? nil : symbol(name, size: size, shape: shape, filled: filled)) ?? fallback(shape, filled)
         }
         if lower.hasPrefix("text:") {
             return textIcon(String(spec.dropFirst(5)), shape: shape, filled: filled, size: size)
         }
         if lower.hasPrefix("iconify:") {
-            return iconify(String(spec.dropFirst(8)), size: size)
-                ?? textIcon(initials(fallbackTitle ?? "?"), shape: shape, filled: filled, size: size)
+            return iconify(String(spec.dropFirst(8)), size: size) ?? fallback(shape, filled)
         }
         if let baseURL, ["png", "pdf", "svg", "tiff", "tif", "jpg", "jpeg", "icns"].contains((spec as NSString).pathExtension.lowercased()) {
             let url = baseURL.appendingPathComponent(spec)
@@ -67,7 +72,7 @@ enum IconRenderer {
                 img.size = NSSize(width: size, height: size)
                 return img
             }
-            return textIcon(initials(fallbackTitle ?? "?"), shape: shape, filled: filled, size: size)
+            return fallback(shape, filled)
         }
         if spec.contains("."), !spec.contains(" "), let img = symbol(spec, size: size, shape: shape, filled: filled) {
             return img

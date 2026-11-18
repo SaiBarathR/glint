@@ -154,47 +154,58 @@ public enum JavaScriptRunner {
         let native = JSValue(newObjectIn: ctx)!
         let extID = env?.extensionID ?? ""
 
-        let pasteText: @convention(block) (String, Bool) -> Void = { [weak host] t, restore in host?.pasteText(t, restoreClipboard: restore) }
-        let copyText: @convention(block) (String) -> Void = { [weak host] t in host?.copyText(t) }
-        let openUrl: @convention(block) (String, Bool, String) -> Void = { [weak host] u, bg, app in
+        let pasteText: @convention(block) (String, Bool) -> Void = { t, restore in host?.pasteText(t, restoreClipboard: restore) }
+        let copyText: @convention(block) (String) -> Void = { t in host?.copyText(t) }
+        let openUrl: @convention(block) (String, Bool, String) -> Void = { u, bg, app in
             if let url = URL(string: u) ?? URL(string: u.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") {
                 host?.openURL(url, background: bg, appBundleID: app.isEmpty ? nil : app)
             }
         }
-        let showText: @convention(block) (String, Bool) -> Void = { [weak host] t, p in host?.showText(t, preview: p) }
-        let showStatus: @convention(block) (Bool) -> Void = { [weak host] ok in host?.showStatus(success: ok) }
-        let showSettings: @convention(block) () -> Void = { [weak host] in host?.showSettings(extensionID: extID) }
-        let pressKey: @convention(block) (JSValue) -> Void = { [weak host] v in
+        let showText: @convention(block) (String, Bool) -> Void = { t, p in host?.showText(t, preview: p) }
+        let showStatus: @convention(block) (Bool) -> Void = { ok in host?.showStatus(success: ok) }
+        let showSettings: @convention(block) () -> Void = { host?.showSettings(extensionID: extID) }
+        let pressKey: @convention(block) (JSValue) -> Void = { v in
             var any: Any?
             if v.isString { any = v.toString() }
             else if v.isNumber { any = v.toNumber() }
             else { any = v.toDictionary() }
             if let any, let combo = KeyCombo(config: any) { host?.pressKey(combo) }
         }
-        let performCommand: @convention(block) (String) -> Void = { [weak host] c in
+        let performCommand: @convention(block) (String) -> Void = { c in
             let map: [String: StandardCommand] = ["cut": .cut, "copy": .copy, "paste": .paste, "pasteplain": .pasteMatchStyle,
                                                   "pastematchstyle": .pasteMatchStyle, "selectall": .selectAll,
                                                   "undo": .undo, "redo": .redo]
             if let cmd = map[normalizeKey(c)] { host?.performCommand(cmd) }
         }
-        let log: @convention(block) (String) -> Void = { [weak host] m in host?.log(m, extensionID: extID) }
+        let log: @convention(block) (String) -> Void = { m in host?.log(m, extensionID: extID) }
         let b64e: @convention(block) (String) -> String = { Data($0.utf8).base64EncodedString() }
         let b64d: @convention(block) (String) -> String = { s in
             var str = s
             while str.count % 4 != 0 { str += "=" }
             return Data(base64Encoded: str).map { String(decoding: $0, as: UTF8.self) } ?? ""
         }
+        // Wall-clock deadline: the execution time limit only counts CPU time, so sleeping must stop here.
+        let deadline = Date().addingTimeInterval(timeLimit)
         let sleep: @convention(block) (Double) -> Void = { ms in
-            if allowSleep { Thread.sleep(forTimeInterval: min(ms, 10_000) / 1000) }
+            guard allowSleep else { return }
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 {
+                if let c = JSContext.current() { c.exception = JSValue(newErrorFromMessage: "Timed out", in: c) }
+                return
+            }
+            Thread.sleep(forTimeInterval: min(min(ms, 10_000) / 1000, remaining))
         }
         let setTimeoutFn: @convention(block) (JSValue, Double) -> Void = { fn, ms in
             guard !sandboxed else { return }
-            DispatchQueue.global().asyncAfter(deadline: .now() + ms / 1000) { fn.call(withArguments: []) }
+            // Keep the host alive until the callback has run: it may call glint.* after the action returned.
+            DispatchQueue.global().asyncAfter(deadline: .now() + ms / 1000) {
+                withExtendedLifetime(host) { _ = fn.call(withArguments: []) }
+            }
         }
         let htmlToText: @convention(block) (String) -> String = { html in
             html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         }
-        let clipboardText: @convention(block) () -> String = { [weak host] in
+        let clipboardText: @convention(block) () -> String = {
             host?.currentClipboardText() ?? env?.context.clipboardText ?? ""
         }
         let bundleURL = env?.bundleURL
@@ -224,6 +235,8 @@ public enum JavaScriptRunner {
                 }
                 if !body.isNull, !body.isUndefined, let s = body.toString() { request.httpBody = Data(s.utf8) }
                 URLSession.shared.dataTask(with: request) { data, response, error in
+                    // Promise continuations may call glint.* after the action returned; keep the host alive.
+                    defer { withExtendedLifetime(host) {} }
                     if let error { reject?.call(withArguments: [error.localizedDescription]); return }
                     let http = response as? HTTPURLResponse
                     var hdrs: [String: String] = [:]
