@@ -402,7 +402,7 @@ A shell action receives:
 
 To keep the environment under macOS's size limit, any single value larger than 64 KB is left empty, and the
 whole environment is kept under about 384 KB: when it would be larger, values are emptied in this order until
-it fits: `GLINT_HTML`, `GLINT_MARKDOWN`, `GLINT_FULL_TEXT`, regex groups, `GLINT_URLS`, option values and,
+it fits: `GLINT_HTML`, `GLINT_MARKDOWN`, `GLINT_FULL_TEXT`, `GLINT_BROWSER_URL`, regex groups, `GLINT_URLS`, option values and,
 last, `GLINT_TEXT`. The full input text is always on **stdin**, so scripts that may receive large selections
 should read stdin.
 
@@ -559,9 +559,9 @@ module.exports = {
 ```
 
 - Module-level keys read: `name`, `identifier`, `icon`, `description`, `requirements`, `regex`, `after`,
-  `apps`/`app`, `excludedApps`, `stayVisible`, `captureHtml`, `options`.
+  `apps`/`app`, `excludedApps`, `stayVisible`, `captureHtml`, `restorePasteboard`, `options`.
 - Per-action keys: `title`, `icon`, `identifier`, `requirements`, `regex`, `after`, `apps`,
-  `excludedApps`, `stayVisible`, `captureHtml`, `description`, and `code(input, options, context)`. The
+  `excludedApps`, `stayVisible`, `captureHtml`, `restorePasteboard`, `description`, and `code(input, options, context)`. The
   arguments are `glint.input`, `glint.options` and `glint.context`. An action may also be a bare function.
 - `exports.action = {...}` (or a function) defines a single action.
 - **Dynamic actions**: when `exports.actions` is a *function* `(input, options, context) => [...]`, Glint

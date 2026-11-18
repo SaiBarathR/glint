@@ -15,7 +15,7 @@ final class ActionPerformer: ActionHost {
 
     func perform(_ action: BarAction, flags: NSEvent.ModifierFlags) {
         // Any action may write the clipboard (Copy, Cut, results): an older late-⌘C watcher must not undo it.
-        Clipboard.noteUserCopy()
+        Clipboard.retireWatchers()
         let mods = ModifierState(rawValue: Int(flags.rawValue) & (ModifierState.shift.rawValue | ModifierState.control.rawValue
                                                                   | ModifierState.option.rawValue | ModifierState.command.rawValue))
         guard let selection else { return }
@@ -265,14 +265,18 @@ final class SessionHost: ActionHost {
 
     /// The selection is current and its field has focus. Off the main thread, waits up to a second for focus
     /// to come back (e.g. after the action's own dialog closes) before giving up.
+    /// Once input was judged undeliverable it stays that way, so a multi-key action doesn't wait per key.
+    private var gaveUp = false
     private var canDeliverInput: Bool {
-        guard isCurrent else { return false }
+        guard !gaveUp, isCurrent else { return false }
         if selection.isStillFocused() { return true }
-        guard !Thread.isMainThread else { return false }
-        for _ in 0..<20 {
-            Thread.sleep(forTimeInterval: 0.05)
-            if selection.isStillFocused() { return isCurrent }
+        if !Thread.isMainThread {
+            for _ in 0..<20 {
+                Thread.sleep(forTimeInterval: 0.05)
+                if selection.isStillFocused() { return isCurrent }
+            }
         }
+        gaveUp = true
         return false
     }
 

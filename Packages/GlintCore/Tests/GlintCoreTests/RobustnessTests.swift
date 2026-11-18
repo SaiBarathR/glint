@@ -303,3 +303,35 @@ final class ReviewRoundFourTests: XCTestCase {
         XCTAssertEqual(ExtensionLoader.loadAll(in: dir).extensions.map(\.name), ["Dot"])
     }
 }
+
+final class ReviewRoundFiveTests: XCTestCase {
+    func testSameTitledDynamicActionsKeepTheirIndex() async throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        // #glint
+        // name: Two
+        // language: javascript
+        // module: true
+        exports.actions = function() {
+          return [{ title: 'Open', code: function() { return 'FIRST'; } }, { title: 'Open', code: function() { return 'SECOND'; } }];
+        };
+        """)
+        let ctx = SelectionContext(text: "x")
+        let runtime = ExtensionRuntime(host: nil)
+        let built = runtime.populateDynamic(m, input: ActionInput(text: "x"), context: ctx, modifiers: [], options: [:])
+        let out = await runtime.perform(built[1], of: m, input: ActionInput(text: "x"), context: ctx, modifiers: [],
+                                        options: [:], dynamicIndex: 1)
+        XCTAssertEqual(out, .result("SECOND"))
+    }
+
+    func testJSModuleRestorePasteboard() throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        // #glint
+        // name: R
+        // language: javascript
+        // module: true
+        exports.restorePasteboard = true;
+        exports.actions = [{ title: 'A', code: function() { return 'a'; } }, { title: 'B', restorePasteboard: false, code: function() {} }];
+        """)
+        XCTAssertEqual(m.actions.map(\.restoreClipboard), [true, false])
+    }
+}

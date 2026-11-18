@@ -302,7 +302,7 @@ public enum JavaScriptRunner {
         var info = ModuleInfo()
         let exports = moduleExports(ctx)
         for key in ["name", "identifier", "icon", "description", "requirements", "regex", "after", "apps", "app",
-                    "excludedApps", "stayVisible", "captureHtml"] {
+                    "excludedApps", "stayVisible", "captureHtml", "restorePasteboard", "restoreClipboard"] {
             if let v = exports.forProperty(key), !v.isUndefined, !v.isNull, let obj = v.toObject() { info.config[key] = obj }
         }
         if let opts = exports.forProperty("options"), opts.isArray, let arr = opts.toArray() { info.config["options"] = arr }
@@ -344,7 +344,7 @@ public enum JavaScriptRunner {
             return d
         }
         for key in ["title", "icon", "identifier", "requirements", "regex", "after", "apps", "excludedApps",
-                    "stayVisible", "captureHtml", "description"] {
+                    "stayVisible", "captureHtml", "restorePasteboard", "restoreClipboard", "description"] {
             if let p = v.forProperty(key), !p.isUndefined, !p.isNull, let obj = p.toObject() { d[key] = obj }
         }
         if d["title"] == nil { d["title"] = fallbackTitle ?? "Action" }
@@ -408,10 +408,14 @@ public enum JavaScriptRunner {
                                 if list.isArray {
                                     // Input may differ from when the bar was built: find the clicked action by title.
                                     let count = Int(list.forProperty("length").toInt32())
-                                    let byTitle = dynamicTitle.flatMap { title in
-                                        (0..<count).map { list.atIndex($0)! }.first { $0.forProperty("title")?.toString() == title }
+                                    let wanted = dynamicIndex ?? index
+                                    func title(_ i: Int) -> String? { list.atIndex(i)?.forProperty("title")?.toString() }
+                                    if let dynamicTitle, wanted < count, title(wanted) != dynamicTitle,
+                                       let match = (0..<count).first(where: { title($0) == dynamicTitle }) {
+                                        target = list.atIndex(match)
+                                    } else {
+                                        target = list.atIndex(wanted)
                                     }
-                                    target = byTitle ?? list.atIndex(dynamicIndex ?? index)
                                 } else {
                                     target = list
                                 }
