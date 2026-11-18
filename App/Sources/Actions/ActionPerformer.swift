@@ -17,13 +17,7 @@ final class ActionPerformer: ActionHost {
         // If an app hasn't answered Glint's ⌘C yet, let that settle first: its late answer must not land in the
         // middle of this action's clipboard writes or keystrokes.
         if Clipboard.copyOutstanding, !waitedForClipboard {
-            let clickedSession = session
-            Task { @MainActor in
-                await Clipboard.waitForOutstandingCopy()
-                // A newer selection was made while waiting: this click belonged to a bar that's gone.
-                guard self.session == clickedSession else { return }
-                self.perform(action, flags: flags, waitedForClipboard: true)
-            }
+            whenClipboardSettled { self.perform(action, flags: flags, waitedForClipboard: true) }
             return
         }
         let mods = ModifierState(rawValue: Int(flags.rawValue) & (ModifierState.shift.rawValue | ModifierState.control.rawValue
@@ -41,9 +35,15 @@ final class ActionPerformer: ActionHost {
             Task {
                 var input = input
                 var context = selection.context
-                if spec.captureHTML, input.html == nil, let copied = await Clipboard.copySelection() {
-                    input.html = copied.1
-                    context.html = copied.1
+                if spec.captureHTML, input.html == nil {
+                    // The user asked for this, so give a slow app time to answer, and never run the action
+                    // while that ⌘C is still unanswered.
+                    if let copied = await Clipboard.copySelection(timeout: 1.5) {
+                        input.html = copied.1
+                        context.html = copied.1
+                    } else {
+                        await Clipboard.waitForOutstandingCopy()
+                    }
                 }
                 // Let the target app regain its key state before keystrokes arrive.
                 try? await Task.sleep(nanoseconds: 40_000_000)
@@ -54,6 +54,32 @@ final class ActionPerformer: ActionHost {
             }
         }
     }
+
+    // MARK: Waiting for an unanswered ⌘C
+
+    private var pendingClick: UUID?
+
+    /// Runs `block` once no Glint ⌘C is outstanding. The bar is hidden meanwhile (no double clicks), and the
+    /// click is dropped if the user moves on (click, key, app switch), makes a new selection, or focus leaves
+    /// the selected field.
+    func whenClipboardSettled(_ block: @escaping () -> Void) {
+        guard Clipboard.copyOutstanding else { block(); return }
+        let token = UUID()
+        pendingClick = token
+        let clickedSession = session
+        let clickedSelection = selection
+        popup.dismiss()
+        Task { @MainActor in
+            await Clipboard.waitForOutstandingCopy()
+            guard self.pendingClick == token, self.session == clickedSession,
+                  clickedSelection?.isStillFocused() ?? true else { return }
+            self.pendingClick = nil
+            block()
+        }
+    }
+
+    /// The user moved on: forget a click that is waiting for the clipboard.
+    func cancelPendingClick() { pendingClick = nil }
 
     /// Runs an entry's first applicable action directly (per-action hotkeys).
     func performFirstAction(of entryKey: String, selection: CapturedSelection) {
@@ -137,8 +163,11 @@ final class ActionPerformer: ActionHost {
             let guesses = Spelling.guesses(for: text)
             guard !guesses.isEmpty else { popup.showResult("No suggestions", preview: false); return }
             popup.showChoices(guesses) { [weak self] choice, flags in
-                self?.popup.dismiss()
-                if flags.contains(.shift) { Clipboard.copy(choice) } else { self?.pasteText(choice, restoreClipboard: true) }
+                guard let self else { return }
+                self.popup.dismiss()
+                self.whenClipboardSettled {
+                    if flags.contains(.shift) { Clipboard.copy(choice) } else { self.pasteText(choice, restoreClipboard: true) }
+                }
             }
         case .formatting:
             popup.dismiss()

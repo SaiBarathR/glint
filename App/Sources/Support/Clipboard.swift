@@ -127,6 +127,15 @@ enum Clipboard {
         }
     }
 
+    /// True when the app answers an Accessibility request within 0.1 s.
+    private static func appIsResponsive(_ pid: pid_t) -> Bool {
+        guard pid != 0 else { return false }
+        let el = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(el, 0.1)
+        var value: AnyObject?
+        return AXUIElementCopyAttributeValue(el, kAXRoleAttribute as CFString, &value) == .success
+    }
+
     /// Should an app's answer to Glint's ⌘C, arriving now, be undone? Not if the user copied in the meantime:
     /// a ⌘C/⌘X key, or a change arriving well after a right-click / menu-bar click (a menu's Copy item).
     private static func shouldRestore(userGen: Int, sentAt: Date) -> Bool {
@@ -141,28 +150,38 @@ enum Clipboard {
         // Prepare and send on the main actor in one step. Never send a second ⌘C while one is unanswered
         // (its late answer would be mistaken for ours), never after the capture was cancelled, and never
         // right after the user copied (or may be copying) something themselves.
-        let prepared = await MainActor.run { () -> (Snapshot, Int, Date)? in
+        let prepared = await MainActor.run { () -> (Snapshot, Int, Date, pid_t)? in
             guard !Task.isCancelled, !copyOutstanding, Date().timeIntervalSince(lastUserCopyAt) > 0.5 else { return nil }
             flushPendingReturn()
             let before = snapshot()
             KeySender.command(.copy)
             copyOutstanding = true
-            return (before, userCopyGeneration, Date())
+            return (before, userCopyGeneration, Date(), NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0)
         }
-        guard let (before, userGen, sentAt) = prepared else { return nil }
+        guard let (sentBaseline, userGen, sentAt, targetPID) = prepared else { return nil }
 
-        // Poll for the answer (even if cancelled, so the clipboard always settles).
+        // Poll for the answer (even if cancelled, so the clipboard always settles). Glint's own writes in the
+        // meantime (a slow action finishing) aren't the answer: they become the baseline to return to.
         let deadline = Date().addingTimeInterval(timeout)
         var changed = false
+        var current = sentBaseline
         while Date() < deadline {
             await pause(0.02)
-            if await MainActor.run(body: { pb.changeCount != before.changeCount }) { changed = true; break }
+            let answered = await MainActor.run { () -> Bool in
+                guard pb.changeCount != current.changeCount else { return false }
+                if pb.changeCount == ownChangeCount { current = snapshot(); return false }
+                return true
+            }
+            if answered { changed = true; break }
         }
+        let before = current
         guard changed else {
-            // The app may still answer late. Keep watching until it does or 1.5 s pass; Glint's own writes in the
-            // meantime become the new baseline to return to.
+            // The app may still answer late. Keep watching until it does or the window ends; Glint's own writes
+            // in the meantime become the new baseline to return to.
             Task.detached {
-                let lateDeadline = sentAt.addingTimeInterval(1.85)
+                // An app that answers Accessibility promptly but ignored ⌘C most likely had nothing to copy:
+                // watch briefly so the fallback reopens soon. A busy app gets the full window.
+                let lateDeadline = sentAt.addingTimeInterval(appIsResponsive(targetPID) ? 0.7 : 1.85)
                 var baseline = before
                 var settled = false
                 while Date() < lateDeadline, !settled {
@@ -173,7 +192,11 @@ enum Clipboard {
                             baseline = snapshot()
                             return false
                         }
-                        if shouldRestore(userGen: userGen, sentAt: sentAt) { restore(baseline) }
+                        if shouldRestore(userGen: userGen, sentAt: sentAt) {
+                            restore(baseline)
+                            // A paste-result return pending from before must compare against this restore.
+                            if borrowed != nil { borrowedChangeCount = pb.changeCount }
+                        }
                         return true
                     }
                 }
@@ -183,7 +206,10 @@ enum Clipboard {
         }
         return await MainActor.run { () -> (String, String?)? in
             defer {
-                if shouldRestore(userGen: userGen, sentAt: sentAt) { restore(before) }
+                if shouldRestore(userGen: userGen, sentAt: sentAt) {
+                    restore(before)
+                    if borrowed != nil { borrowedChangeCount = pb.changeCount }
+                }
                 copyOutstanding = false
             }
             if Task.isCancelled { return nil }
