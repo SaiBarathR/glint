@@ -1,0 +1,74 @@
+name: Glint
+options:
+  bundleIdPrefix: dev.saibarath
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  GlintCore:
+    path: Packages/GlintCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    DEVELOPMENT_TEAM: VFPW2U83VW
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Apple Development"
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Glint:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources/Assets.xcassets
+      - path: App/Resources/Extensions
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: GlintCore
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleName: Glint
+        CFBundleDisplayName: Glint
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: "© 2026 Sai Barath"
+        NSAppleEventsUsageDescription: "Glint runs AppleScript actions and extensions you choose, which may control other apps."
+        NSServices: []
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Glint Extension
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSTypeIsPackage: true
+            LSItemContentTypes: [dev.saibarath.glint.extension]
+          - CFBundleTypeName: PopClip Extension
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSTypeIsPackage: true
+            CFBundleTypeExtensions: [popclipext, popclipextz]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.saibarath.glint.extension
+            UTTypeDescription: Glint Extension
+            UTTypeConformsTo: [com.apple.package]
+            UTTypeTagSpecification:
+              public.filename-extension: [glintext]
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.saibarath.glint
+            CFBundleURLSchemes: [glint]
+    entitlements:
+      path: App/Resources/Glint.entitlements
+      properties:
+        com.apple.security.automation.apple-events: true
+        com.apple.security.cs.disable-library-validation: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.saibarath.glint
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES
+        INFOPLIST_KEY_LSUIElement: YES
