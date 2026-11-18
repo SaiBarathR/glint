@@ -1,5 +1,8 @@
 import AppKit
 
+// Scripts that exit without reading their input must not kill Glint with SIGPIPE.
+signal(SIGPIPE, SIG_IGN)
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

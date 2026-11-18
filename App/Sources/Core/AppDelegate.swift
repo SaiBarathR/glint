@@ -155,12 +155,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     private func runActionHotKey(_ key: String) {
         pendingCapture?.cancel()
         pendingCapture = Task { @MainActor [weak self] in
-            // Wait for the hotkey's modifier keys to be released so they don't alter our keystrokes.
-            for _ in 0..<20 where !NSEvent.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty {
-                try? await Task.sleep(nanoseconds: 25_000_000)
-            }
+            await self?.waitForModifierRelease()
             guard let sel = await SelectionReader.capture(mouse: nil, allowCopyFallback: true) else { NSSound.beep(); return }
             self?.performer.performFirstAction(of: key, selection: sel)
+        }
+    }
+
+    /// Waits (up to 0.5 s) for the hotkey's modifier keys to be released so they don't alter our ⌘C / ⌘V.
+    @MainActor private func waitForModifierRelease() async {
+        for _ in 0..<20 where !NSEvent.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty {
+            try? await Task.sleep(nanoseconds: 25_000_000)
         }
     }
 
@@ -175,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
         pendingCapture?.cancel()
         pendingCapture = Task { @MainActor [weak self] in
             guard let self else { return }
+            if trigger == .hotKey { await self.waitForModifierRelease() }
             // Give the app a moment to update its selection (and honour the user's delay).
             let delay = max(trigger == .hotKey ? 0.0 : 0.06, prefs.popupDelay)
             if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
@@ -199,7 +204,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     }
 
     func selectionMonitorShouldDismiss(_ monitor: SelectionMonitor, reason: SelectionMonitor.DismissReason) {
-        if reason == .mouseDown { pendingCapture?.cancel() }
+        // Any new input means the user moved on: drop a capture that hasn't shown its bar yet.
+        pendingCapture?.cancel()
         popup.dismiss()
     }
 

@@ -39,7 +39,7 @@ final class PopupController {
         var item = BarItem(kind: .label(text), tooltip: preview ? "Click to copy" : nil)
         if preview {
             item.handler = { [weak self] _ in
-                Clipboard.setString(text)
+                Clipboard.copy(text)
                 self?.showStatus(success: true)
             }
         }

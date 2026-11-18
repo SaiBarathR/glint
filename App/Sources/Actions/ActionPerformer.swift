@@ -55,7 +55,7 @@ final class ActionPerformer: ActionHost {
         case .search:
             let template = prefs.searchTemplate
             let url = Templates.fillURL(template, text: text, options: [:])
-            if mods.contains(.shift) { Clipboard.setString(url); popup.showStatus(success: true); return }
+            if mods.contains(.shift) { Clipboard.copy(url); popup.showStatus(success: true); return }
             popup.dismiss()
             if let u = URL(string: url) { openURL(u, background: mods.contains(.command), appBundleID: nil) }
         case .cut:
@@ -64,13 +64,13 @@ final class ActionPerformer: ActionHost {
         case .copy:
             if mods.contains(.shift), let existing = Clipboard.string, !existing.isEmpty {
                 // Append to what's already on the clipboard.
-                Clipboard.setString(existing + (existing.hasSuffix("\n") ? "" : "\n") + ctx.text)
+                Clipboard.copy(existing + (existing.hasSuffix("\n") ? "" : "\n") + ctx.text)
             } else {
                 KeySender.command(.copy)
                 // Apps that don't support ⌘C from a background click still get the text.
                 let before = NSPasteboard.general.changeCount
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    if NSPasteboard.general.changeCount == before { Clipboard.setString(ctx.text) }
+                    if NSPasteboard.general.changeCount == before { Clipboard.copy(ctx.text) }
                 }
             }
             popup.showStatus(success: true)
@@ -82,7 +82,7 @@ final class ActionPerformer: ActionHost {
             pastePlain()
         case .openLink:
             if mods.contains(.shift) {
-                Clipboard.setString(detected.urls.joined(separator: "\n"))
+                Clipboard.copy(detected.urls.joined(separator: "\n"))
                 popup.showStatus(success: true)
                 return
             }
@@ -111,7 +111,7 @@ final class ActionPerformer: ActionHost {
             guard !guesses.isEmpty else { popup.showResult("No suggestions", preview: false); return }
             popup.showChoices(guesses) { [weak self] choice, flags in
                 self?.popup.dismiss()
-                if flags.contains(.shift) { Clipboard.setString(choice) } else { self?.pasteText(choice, restoreClipboard: true) }
+                if flags.contains(.shift) { Clipboard.copy(choice) } else { self?.pasteText(choice, restoreClipboard: true) }
             }
         case .formatting:
             popup.dismiss()
@@ -128,7 +128,7 @@ final class ActionPerformer: ActionHost {
                 popup.dismiss()
                 pasteText(text.hasSuffix("=") ? "\(text) \(result)" : result, restoreClipboard: true)
             } else {
-                Clipboard.setString(result)
+                Clipboard.copy(result)
                 popup.showStatus(success: true)
             }
         }
@@ -136,26 +136,31 @@ final class ActionPerformer: ActionHost {
 
     private func pastePlain() {
         guard let s = Clipboard.string else { return }
-        let snap = Clipboard.snapshot()
+        Clipboard.borrow()
         Clipboard.setString(s)
         KeySender.command(.paste)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { Clipboard.restore(snap) }
+        Clipboard.scheduleReturn()
     }
 
     // MARK: ActionHost
 
     func pasteText(_ text: String, restoreClipboard: Bool) {
         onMain {
-            let snap = Clipboard.snapshot()
+            let restore = restoreClipboard || self.prefs.restoreClipboardAfterPaste
+            if restore { Clipboard.borrow() } else { Clipboard.keepCurrent() }
             Clipboard.setString(text)
             KeySender.command(.paste)
-            if restoreClipboard || self.prefs.restoreClipboardAfterPaste {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Clipboard.restore(snap) }
-            }
+            if restore { Clipboard.scheduleReturn() }
         }
     }
 
-    func copyText(_ text: String) { onMain { Clipboard.setString(text) } }
+    func copyText(_ text: String) {
+        onMain {
+            // A deliberate copy must survive any pending clipboard restore.
+            Clipboard.keepCurrent()
+            Clipboard.setString(text)
+        }
+    }
 
     func openURL(_ url: URL, background: Bool, appBundleID: String?) {
         onMain {

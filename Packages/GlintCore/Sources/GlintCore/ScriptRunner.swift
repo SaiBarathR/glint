@@ -7,6 +7,9 @@ public enum ScriptRunner {
         public var stderr: String
     }
 
+    /// Writing to a pipe whose reader exited must fail with EPIPE instead of killing the app.
+    static let ignoreSIGPIPE: Void = { signal(SIGPIPE, SIG_IGN) }()
+
     static let extraPath = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
     /// Runs a shell script (inline source or file) with the given environment, feeding `stdin`.
@@ -23,6 +26,7 @@ public enum ScriptRunner {
 
     public static func runShellSync(source: String?, file: URL?, interpreter: String?, environment: [String: String],
                                     workingDirectory: URL?, stdin: String?, timeout: TimeInterval = 30) -> ShellResult {
+        _ = ignoreSIGPIPE
         let fm = FileManager.default
         var tempFile: URL?
         defer { if let tempFile { try? fm.removeItem(at: tempFile) } }
@@ -79,31 +83,57 @@ public enum ScriptRunner {
         process.standardError = errPipe
         process.standardInput = inPipe
 
+        // Read both pipes incrementally. A script may leave a background child holding the pipes open,
+        // so EOF can't be relied on: after the script exits we wait only briefly for remaining output.
+        let lock = NSLock()
         var outData = Data(), errData = Data()
-        let group = DispatchGroup()
-        group.enter(); group.enter()
-        DispatchQueue.global().async { outData = outPipe.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-        DispatchQueue.global().async { errData = errPipe.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+        let eof = DispatchGroup()
+        for (pipe, isOut) in [(outPipe, true), (errPipe, false)] {
+            eof.enter()
+            var finished = false
+            pipe.fileHandleForReading.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                lock.lock(); defer { lock.unlock() }
+                if chunk.isEmpty {
+                    if !finished { finished = true; handle.readabilityHandler = nil; eof.leave() }
+                } else if isOut { outData.append(chunk) } else { errData.append(chunk) }
+            }
+        }
 
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
         do { try process.run() } catch {
+            outPipe.fileHandleForReading.readabilityHandler = nil
+            errPipe.fileHandleForReading.readabilityHandler = nil
             return ShellResult(status: -1, stdout: "", stderr: "Couldn't start \(process.executableURL?.path ?? "script"): \(error.localizedDescription)")
         }
-        if let stdin, let data = stdin.data(using: .utf8) {
-            inPipe.fileHandleForWriting.write(data)
-        }
-        try? inPipe.fileHandleForWriting.close()
-
         let deadline = DispatchTime.now() + timeout
-        let finished = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in finished.signal() }
-        if process.isRunning, finished.wait(timeout: deadline) == .timedOut {
-            process.terminate()
-            _ = group.wait(timeout: .now() + 1)
-            return ShellResult(status: -2, stdout: String(decoding: outData, as: UTF8.self), stderr: "Timed out after \(Int(timeout))s")
+
+        // Feed stdin off this thread: scripts that never read it must not block us (or kill us with SIGPIPE).
+        let input = stdin.flatMap { $0.data(using: .utf8) } ?? Data()
+        DispatchQueue.global(qos: .utility).async {
+            let writer = inPipe.fileHandleForWriting
+            if !input.isEmpty { try? writer.write(contentsOf: input) }
+            try? writer.close()
         }
-        group.wait()
-        return ShellResult(status: process.terminationStatus, stdout: String(decoding: outData, as: UTF8.self),
-                           stderr: String(decoding: errData, as: UTF8.self))
+
+        var timedOut = false
+        if exited.wait(timeout: deadline) == .timedOut {
+            timedOut = true
+            process.terminate()
+            if exited.wait(timeout: .now() + 1) == .timedOut {
+                kill(process.processIdentifier, SIGKILL)
+                _ = exited.wait(timeout: .now() + 1)
+            }
+        }
+        _ = eof.wait(timeout: .now() + (timedOut ? 0.2 : 1.0))
+        outPipe.fileHandleForReading.readabilityHandler = nil
+        errPipe.fileHandleForReading.readabilityHandler = nil
+        lock.lock()
+        let out = String(decoding: outData, as: UTF8.self), err = String(decoding: errData, as: UTF8.self)
+        lock.unlock()
+        if timedOut { return ShellResult(status: -2, stdout: out, stderr: "Timed out after \(Int(timeout))s") }
+        return ShellResult(status: process.isRunning ? -2 : process.terminationStatus, stdout: out, stderr: err)
     }
 
     /// Runs AppleScript source or a script file. Returns the string result or an error message.

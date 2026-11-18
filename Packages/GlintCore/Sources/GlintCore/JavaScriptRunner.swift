@@ -124,8 +124,25 @@ public enum JavaScriptRunner {
         init(env: Environment?, host: ActionHost?) { self.env = env; self.host = host }
     }
 
-    static func makeContext(env: Environment?, host: ActionHost?, errors: Box<String?>) -> JSContext {
+    /// Limits how long JavaScript may run in `ctx` (uses JavaScriptCore's execution time limit when available).
+    static func applyTimeLimit(_ ctx: JSContext, seconds: Double) {
+        typealias SetLimit = @convention(c) (JSContextGroupRef?, Double, OpaquePointer?, UnsafeMutableRawPointer?) -> Void
+        guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "JSContextGroupSetExecutionTimeLimit") else { return }
+        let fn = unsafeBitCast(sym, to: SetLimit.self)
+        fn(JSContextGetGroup(ctx.jsGlobalContextRef), seconds, nil, nil)
+    }
+
+    /// True when `source` parses as a script (no top-level `return`).
+    static func parses(_ source: String, in ctx: JSContext) -> Bool {
+        let str = JSStringCreateWithCFString(source as CFString)
+        defer { JSStringRelease(str) }
+        return JSCheckScriptSyntax(ctx.jsGlobalContextRef, str, nil, 1, nil)
+    }
+
+    static func makeContext(env: Environment?, host: ActionHost?, errors: Box<String?>, timeLimit: Double = 30,
+                            allowSleep: Bool = true) -> JSContext {
         let ctx = JSContext()!
+        applyTimeLimit(ctx, seconds: timeLimit)
         ctx.exceptionHandler = { _, exc in
             let msg = exc?.toString() ?? "error"
             let line = exc?.forProperty("line")?.toString() ?? ""
@@ -164,7 +181,9 @@ public enum JavaScriptRunner {
             while str.count % 4 != 0 { str += "=" }
             return Data(base64Encoded: str).map { String(decoding: $0, as: UTF8.self) } ?? ""
         }
-        let sleep: @convention(block) (Double) -> Void = { ms in Thread.sleep(forTimeInterval: min(ms, 10_000) / 1000) }
+        let sleep: @convention(block) (Double) -> Void = { ms in
+            if allowSleep { Thread.sleep(forTimeInterval: min(ms, 10_000) / 1000) }
+        }
         let setTimeoutFn: @convention(block) (JSValue, Double) -> Void = { fn, ms in
             DispatchQueue.global().asyncAfter(deadline: .now() + ms / 1000) { fn.call(withArguments: []) }
         }
@@ -252,7 +271,7 @@ public enum JavaScriptRunner {
 
     public static func describeModule(source: String) -> ModuleInfo {
         let errors = Box<String?>(nil)
-        let ctx = makeContext(env: nil, host: nil, errors: errors)
+        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 2, allowSleep: false)
         ctx.evaluateScript(source)
         var info = ModuleInfo()
         let exports = moduleExports(ctx)
@@ -316,7 +335,8 @@ public enum JavaScriptRunner {
     /// Dynamic actions: calls `exports.actions(input, options, context)` and describes the returned actions.
     public static func populate(moduleSource: String, env: Environment) -> [[String: Any]] {
         let errors = Box<String?>(nil)
-        let ctx = makeContext(env: env, host: nil, errors: errors)
+        // Runs while the bar is being built, so keep it short and never sleep.
+        let ctx = makeContext(env: env, host: nil, errors: errors, timeLimit: 0.5, allowSleep: false)
         ctx.evaluateScript(moduleSource)
         let exports = moduleExports(ctx)
         guard let fn = exports.forProperty("actions"), isFunction(fn) else { return [] }
@@ -336,13 +356,14 @@ public enum JavaScriptRunner {
             DispatchQueue.global(qos: .userInitiated).async {
                 let once = ResumeOnce(cont)
                 let errors = Box<String?>(nil)
-                let ctx = makeContext(env: env, host: host, errors: errors)
+                let ctx = makeContext(env: env, host: host, errors: errors, timeLimit: timeout)
                 var value: JSValue?
                 switch code {
                 case .inline(let src):
-                    value = ctx.evaluateScript(src)
-                    if let err = errors.value, err.contains("SyntaxError") {
-                        errors.value = nil
+                    if parses(src, in: ctx) {
+                        value = ctx.evaluateScript(src)
+                    } else {
+                        // Scripts may use top-level `return` / `await`: run them as a function body.
                         let isAsync = src.contains("await")
                         value = ctx.evaluateScript("(\(isAsync ? "async " : "")function() {\n\(src)\n})()")
                     }
