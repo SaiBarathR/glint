@@ -1,0 +1,6 @@
+# Bundled Glint extension: search Reddit.
+name: Reddit Search
+identifier: dev.saibarath.glint.reddit
+description: Search Reddit for the selected text.
+icon: symbol:text.bubble
+url: https://www.reddit.com/search/?q=***

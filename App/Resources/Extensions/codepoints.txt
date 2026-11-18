@@ -1,0 +1,14 @@
+# #glint
+# name: Character Codes
+# identifier: dev.saibarath.glint.codepoints
+# description: Show the Unicode code point of every character in the selection. Click the result to copy it.
+# icon: symbol:character.magnify
+# language: perl
+# after: preview-result
+use strict;
+use warnings;
+binmode STDIN, ':encoding(UTF-8)';
+binmode STDOUT, ':encoding(UTF-8)';
+local $/;
+my $text = <STDIN> // '';
+print join(' ', map { sprintf('U+%04X', ord) } split(//, $text));

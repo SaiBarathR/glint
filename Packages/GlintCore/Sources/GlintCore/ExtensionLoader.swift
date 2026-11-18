@@ -21,6 +21,12 @@ public enum ExtensionLoader {
             }
             let dict = try readDictionary(file)
             var manifest = try ManifestParser.parse(dict, bundleURL: url, isBuiltIn: isBuiltIn)
+            // `module: file.js` in a static config: the module supplies the actions.
+            if manifest.actions.isEmpty, let source = manifest.moduleSource {
+                var module = try loadJavaScriptModule(source: source, bundleURL: url, isBuiltIn: isBuiltIn, headerConfig: dict)
+                if module.options.isEmpty { module.options = manifest.options }
+                manifest = module
+            }
             if manifest.identifier.hasPrefix("snippet.") {
                 manifest.identifier = "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
             }

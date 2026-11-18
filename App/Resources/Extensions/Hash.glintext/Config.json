@@ -1,0 +1,12 @@
+{
+  "name": "Hash",
+  "identifier": "dev.saibarath.glint.hash",
+  "description": "Show the SHA-256, SHA-1 or MD5 checksum of the selected text (UTF-8). Click the result to copy it.",
+  "icon": "symbol:number",
+  "after": "preview-result",
+  "actions": [
+    { "title": "SHA-256", "icon": "text:256", "trim": false, "shell script": "/usr/bin/shasum -a 256 | cut -d ' ' -f 1" },
+    { "title": "SHA-1", "icon": "text:SHA1", "trim": false, "shell script": "/usr/bin/shasum -a 1 | cut -d ' ' -f 1" },
+    { "title": "MD5", "icon": "text:MD5", "trim": false, "shell script": "/sbin/md5 -q" }
+  ]
+}

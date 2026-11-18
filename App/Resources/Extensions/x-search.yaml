@@ -1,0 +1,7 @@
+# Bundled Glint extension: search posts on X. Hold Option (⌥) for the latest posts.
+name: X Search
+identifier: dev.saibarath.glint.x-search
+description: Search X (Twitter) for the selected text. Hold ⌥ for the latest posts.
+icon: symbol:bubble.left.and.bubble.right
+url: https://x.com/search?q=***
+alternate url: https://x.com/search?q=***&f=live

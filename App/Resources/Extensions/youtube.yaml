@@ -1,0 +1,6 @@
+# Bundled Glint extension: search YouTube for the selection.
+name: YouTube
+identifier: dev.saibarath.glint.youtube
+description: Search YouTube for the selected text.
+icon: symbol:play.rectangle
+url: https://www.youtube.com/results?search_query=***

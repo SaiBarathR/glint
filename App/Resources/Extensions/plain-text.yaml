@@ -1,0 +1,32 @@
+# Plain Text — strip formatting or markup from the selection.
+name: Plain Text
+identifier: dev.saibarath.glint.plain-text
+description: Copy the selection without formatting, or strip HTML tags from selected markup.
+icon: symbol:doc.plaintext
+actions:
+  - title: Copy as Plain Text
+    icon: symbol:doc.plaintext
+    requirements: [copy]
+    after: copy-result
+    trim: false
+    javascript: return glint.input.text
+  - title: Strip HTML Tags
+    icon: symbol:chevron.left.slash.chevron.right
+    # Only when the selection contains something that looks like a tag; the lookahead keeps the whole selection.
+    regex: '^(?=[\s\S]*<\/?[A-Za-z][^>]*>)[\s\S]*$'
+    after: paste-result
+    javascript: |
+      var named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—',
+                    hellip: '…', copy: '©', reg: '®', trade: '™', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”' };
+      return glint.input.text
+        .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|h[1-6]|tr|blockquote|pre)>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&#x([0-9a-f]+);/gi, function (m, h) { return String.fromCodePoint(parseInt(h, 16)); })
+        .replace(/&#(\d+);/g, function (m, d) { return String.fromCodePoint(parseInt(d, 10)); })
+        .replace(/&([a-z]+);/gi, function (m, n) { return named.hasOwnProperty(n) ? named[n] : m; })
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();

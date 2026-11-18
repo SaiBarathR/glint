@@ -25,6 +25,18 @@
 		<dict>
 			<key>CFBundleTypeExtensions</key>
 			<array>
+				<string>glintextz</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>Zipped Glint Extension</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
 				<string>popclipext</string>
 				<string>popclipextz</string>
 			</array>

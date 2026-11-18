@@ -21,7 +21,8 @@ public final class ExtensionRuntime {
         switch action.kind {
         case .url(let template, let alternate):
             let chosen = (modifiers.contains(.option) ? alternate : nil) ?? template
-            let filled = Templates.fillURL(chosen, text: text, options: options)
+            let filled = Templates.fillURL(chosen, text: text, options: options,
+                                           extras: Templates.extras(input: input, context: context))
             guard let url = URL(string: filled) else { return .failure("Invalid URL: \(filled)") }
             if modifiers.contains(.shift) {
                 host?.copyText(url.absoluteString)
@@ -94,7 +95,8 @@ public final class ExtensionRuntime {
                 return .failure(msg.isEmpty ? "Script exited with status \(r.status)" : msg)
             }
         case .appleScript:
-            let filled = source.map { Templates.fillAppleScript($0, text: input.matchedText, options: options) }
+            let extras = Templates.extras(input: input, context: context)
+            let filled = source.map { Templates.fillAppleScript($0, text: input.matchedText, options: options, extras: extras) }
             switch ScriptRunner.runAppleScript(source: filled, file: file) {
             case .success(let s): return (s?.isEmpty == false) ? .result(s!) : .done
             case .failure(let e): return .failure(e.message)

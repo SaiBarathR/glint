@@ -207,6 +207,26 @@ final class TemplateTests: XCTestCase {
                        "https://x/fr/hi")
     }
 
+    func testExtraPlaceholders() {
+        let ctx = SelectionContext(text: "see https://a.com", appBundleID: "com.x", appName: "My App")
+        let input = ActionInput(text: "see https://a.com", urls: ["https://a.com"])
+        let extras = Templates.extras(input: input, context: ctx)
+        XCTAssertEqual(Templates.fillURL("x://{glint url}/{popclip app name}", text: "t", options: [:], extras: extras),
+                       "x://https%3A%2F%2Fa.com/My%20App")
+    }
+
+    func testYAMLConfigWithModuleFile() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".glintext")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try "name: Mod\nidentifier: t.mod\nmodule: main.js\n".write(to: dir.appendingPathComponent("Config.yaml"), atomically: true, encoding: .utf8)
+        try "exports.actions = [{ title: 'Up', code: (i) => i.text.toUpperCase() }];".write(
+            to: dir.appendingPathComponent("main.js"), atomically: true, encoding: .utf8)
+        let m = try ExtensionLoader.loadBundle(at: dir)
+        XCTAssertEqual(m.identifier, "t.mod")
+        XCTAssertEqual(m.actions.map(\.title), ["Up"])
+    }
+
     func testAppleScriptEscape() {
         XCTAssertEqual(Templates.fillAppleScript("say \"{glint text}\"", text: "a \"q\"", options: [:]), "say \"a \\\"q\\\"\"")
     }

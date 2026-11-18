@@ -1,0 +1,6 @@
+# Bundled Glint extension: answer-engine search.
+name: Perplexity
+identifier: dev.saibarath.glint.perplexity
+description: Ask Perplexity about the selected text.
+icon: symbol:sparkle.magnifyingglass
+url: https://www.perplexity.ai/search?q=***

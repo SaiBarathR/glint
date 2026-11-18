@@ -1,0 +1,16 @@
+# Markdown Link — appears when the selection holds exactly one URL. Any other selected words
+# become the link text ("Glint docs https://example.com" -> "[Glint docs](https://example.com)").
+name: Markdown Link
+identifier: dev.saibarath.glint.markdown-link
+description: Turn a selected URL (plus optional words) into a Markdown link.
+icon: symbol:link
+requirements: [url]
+after: paste-result
+javascript: |
+  var url = glint.input.matchedText;
+  var bare = url.replace(/^[a-z]+:\/\//i, '');
+  var label = glint.input.fullText.split(url).join(' ').split(bare).join(' ').replace(/\s+/g, ' ').trim();
+  label = label.replace(/^[-–—:|,]+\s*|\s*[-–—:|,]+$/g, '');
+  if (!label) { label = bare.replace(/^www\./, '').replace(/\/$/, ''); }
+  label = label.replace(/([\[\]\\])/g, '\\$1');
+  return '[' + label + '](' + url.replace(/\(/g, '%28').replace(/\)/g, '%29') + ')';

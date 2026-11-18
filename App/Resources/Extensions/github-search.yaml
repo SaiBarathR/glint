@@ -1,0 +1,7 @@
+# Bundled Glint extension: search GitHub. Hold Option (⌥) to search code instead of repositories.
+name: GitHub Search
+identifier: dev.saibarath.glint.github-search
+description: Search GitHub repositories for the selection. Hold ⌥ to search code.
+icon: symbol:chevron.left.forwardslash.chevron.right
+url: https://github.com/search?q=***&type=repositories
+alternate url: https://github.com/search?q=***&type=code

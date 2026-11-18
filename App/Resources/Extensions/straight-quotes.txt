@@ -1,0 +1,12 @@
+// #glint
+// name: Straight Quotes
+// identifier: dev.saibarath.glint.straight-quotes
+// description: Replace curly quotes and primes with plain ASCII ' and " (handy for code and terminals).
+// icon: symbol:quote.closing
+// after: paste-result
+// regex: '^(?=[\s\S]*[‘’‚‛′“”„‟″«»])[\s\S]*$'
+var text = glint.input.text;
+return text
+  .replace(/[‘’‚‛′]/g, "'")
+  .replace(/[“”„‟″]/g, '"')
+  .replace(/[«»]/g, '"');

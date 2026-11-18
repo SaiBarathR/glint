@@ -1,0 +1,24 @@
+# Run Shortcut — runs the Shortcuts.app shortcut named in this extension's settings with the
+# selection as input, and shows its text output. Exit code 2 tells Glint to open the settings.
+name: Run Shortcut
+identifier: dev.saibarath.glint.run-shortcut
+description: Run a shortcut from the Shortcuts app on the selected text and show what it returns.
+icon: symbol:square.on.square.dashed
+after: show-result
+options:
+  - identifier: shortcut
+    label: Shortcut name
+    type: string
+    description: The exact name of the shortcut to run. It receives the selected text as input.
+shell script: |
+  if [ -z "$GLINT_OPTION_SHORTCUT" ]; then
+    echo "Set the shortcut name in Glint's settings for Run Shortcut." >&2
+    exit 2
+  fi
+  dir=$(/usr/bin/mktemp -d -t glint-shortcut) || exit 1
+  trap '/bin/rm -rf "$dir"' EXIT
+  /bin/cat > "$dir/input.txt"
+  /usr/bin/shortcuts run "$GLINT_OPTION_SHORTCUT" --input-path "$dir/input.txt" \
+    --output-path "$dir/output.txt" --output-type public.plain-text || exit 1
+  [ -f "$dir/output.txt" ] && /bin/cat "$dir/output.txt"
+  exit 0

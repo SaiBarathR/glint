@@ -1,0 +1,14 @@
+# Bundled Glint extension: two actions, definition and synonyms.
+# (The built-in Look Up action uses the macOS dictionary; these open the web.)
+name: Dictionary
+identifier: dev.saibarath.glint.dictionary
+description: Define a word on Dictionary.com, or find synonyms on Thesaurus.com.
+icon: symbol:character.book.closed
+requirements: [text, '!url']
+actions:
+  - title: Define
+    icon: symbol:character.book.closed
+    url: https://www.dictionary.com/browse/***
+  - title: Synonyms
+    icon: symbol:arrow.triangle.swap
+    url: https://www.thesaurus.com/browse/***

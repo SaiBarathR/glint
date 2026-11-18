@@ -1,0 +1,6 @@
+# Bundled Glint extension: search Stack Overflow (handy for error messages).
+name: Stack Overflow
+identifier: dev.saibarath.glint.stack-overflow
+description: Search Stack Overflow for the selected text, such as an error message.
+icon: symbol:questionmark.bubble
+url: https://stackoverflow.com/search?q=***

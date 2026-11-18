@@ -1,0 +1,15 @@
+# Base64 — a bundle whose actions run shell script files shipped next to this config.
+# The selection arrives on stdin (and in $GLINT_TEXT); stdout becomes the result.
+name: Base64
+identifier: dev.saibarath.glint.base64
+description: Encode the selection as Base64, or decode Base64 (standard or URL-safe) back to text.
+icon: symbol:number.square
+after: paste-result
+actions:
+  - title: Base64 Encode
+    icon: symbol:lock.square
+    shell script file: encode.sh
+  - title: Base64 Decode
+    icon: symbol:lock.open
+    shell script file: decode.sh
+    regex: '^\s*[A-Za-z0-9+/_\-\r\n]{4,}=*\s*$'

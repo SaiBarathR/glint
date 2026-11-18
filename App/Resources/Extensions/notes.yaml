@@ -1,0 +1,26 @@
+# Notes — AppleScript action that saves the selection as a new note in the default folder.
+name: New Note
+identifier: dev.saibarath.glint.notes
+description: Save the selected text as a new note in Notes (default account and folder).
+icon: symbol:note.text.badge.plus
+after: show-status
+applescript: |
+  on replaceText(theText, findText, replaceWith)
+    set AppleScript's text item delimiters to findText
+    set theParts to text items of theText
+    set AppleScript's text item delimiters to replaceWith
+    set theText to theParts as text
+    set AppleScript's text item delimiters to ""
+    return theText
+  end replaceText
+
+  -- Notes bodies are HTML: escape markup characters and keep line breaks.
+  set theHTML to replaceText("{glint text}", "&", "&amp;")
+  set theHTML to replaceText(theHTML, "<", "&lt;")
+  set theHTML to replaceText(theHTML, ">", "&gt;")
+  set theHTML to replaceText(theHTML, return, linefeed)
+  set theHTML to replaceText(theHTML, linefeed, "<br>")
+  tell application "Notes"
+    make new note at default folder of default account with properties {body:"<div>" & theHTML & "</div>"}
+  end tell
+  return ""

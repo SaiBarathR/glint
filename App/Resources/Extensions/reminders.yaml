@@ -1,0 +1,25 @@
+# Reminders — AppleScript action. `{glint text}` is replaced with the selection escaped as
+# an AppleScript string, so it is safe inside the quotes.
+name: Add to Reminders
+identifier: dev.saibarath.glint.reminders
+description: Create a reminder in your default Reminders list. The first line is the title; the rest becomes notes.
+icon: symbol:checklist
+after: show-status
+applescript: |
+  set theText to "{glint text}"
+  set theLines to paragraphs of theText
+  set theTitle to item 1 of theLines
+  set theNotes to ""
+  if (count of theLines) > 1 then
+    set AppleScript's text item delimiters to linefeed
+    set theNotes to (items 2 thru -1 of theLines) as text
+    set AppleScript's text item delimiters to ""
+  end if
+  tell application "Reminders"
+    if theNotes is "" then
+      make new reminder with properties {name:theTitle}
+    else
+      make new reminder with properties {name:theTitle, body:theNotes}
+    end if
+  end tell
+  return ""

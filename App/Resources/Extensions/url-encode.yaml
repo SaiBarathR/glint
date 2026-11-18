@@ -1,0 +1,16 @@
+# URL Encode / Decode with inline JavaScript. `return` at the top level is allowed:
+# Glint wraps inline scripts in a function when needed.
+name: URL Encode
+identifier: dev.saibarath.glint.url-encode
+description: Percent-encode the selection for use in a URL, or decode percent-encoded text.
+icon: symbol:percent
+after: paste-result
+actions:
+  - title: URL Encode
+    icon: symbol:percent
+    javascript: return encodeURIComponent(glint.input.text)
+  - title: URL Decode
+    icon: symbol:textformat.abc
+    # Only offered when the selection contains a %XX escape. The lookahead keeps the whole selection as input.
+    regex: '^(?=[\s\S]*%[0-9A-Fa-f]{2})[\s\S]*$'
+    javascript: return decodeURIComponent(glint.input.text.trim().replace(/\+/g, ' '))

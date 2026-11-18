@@ -1,0 +1,19 @@
+# Whitespace — two actions in one file, written in different languages:
+# an inline JavaScript action and an inline shell action.
+name: Whitespace
+identifier: dev.saibarath.glint.whitespace
+description: Join wrapped lines into one paragraph, or tidy stray spaces and blank lines.
+icon: symbol:text.justify.left
+after: paste-result
+actions:
+  - title: Join Lines
+    icon: symbol:arrow.right.to.line
+    description: Replace line breaks with single spaces (keeps blank-line paragraph breaks).
+    javascript: |
+      var paragraphs = glint.input.text.split(/\r?\n[ \t]*\r?\n\s*/);
+      return paragraphs.map(function (p) { return p.replace(/[ \t]*\r?\n[ \t]*/g, ' '); }).join('\n\n');
+  - title: Trim Whitespace
+    icon: symbol:scissors
+    description: Trim each line, collapse runs of spaces and tabs, and squeeze repeated blank lines.
+    shell script: |
+      /usr/bin/sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]{2,}/ /g' | /bin/cat -s

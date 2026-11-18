@@ -1,0 +1,6 @@
+# Bundled Glint extension: search the selection on Wikipedia.
+name: Wikipedia
+identifier: dev.saibarath.glint.wikipedia
+description: Look up the selected text on Wikipedia.
+icon: symbol:books.vertical
+url: https://en.wikipedia.org/w/index.php?search=***

@@ -1,0 +1,17 @@
+# Open in Terminal — appears when the selection is a path that exists. Opens a Terminal window
+# in that folder (or in the folder containing a selected file).
+name: Open in Terminal
+identifier: dev.saibarath.glint.open-in-terminal
+description: Open a Terminal window at the selected folder path (or the folder of a selected file).
+icon: symbol:apple.terminal
+requirements: [path]
+shell script: |
+  p=$(printf '%s\n' "$GLINT_TEXT" | /usr/bin/head -n 1)
+  p=${p#\"}; p=${p%\"}; p=${p#\'}; p=${p%\'}
+  case "$p" in
+    "~"*) p="$HOME${p#\~}" ;;
+    file://*) p=${p#file://} ;;
+  esac
+  [ -d "$p" ] || p=$(/usr/bin/dirname "$p")
+  [ -d "$p" ] || { echo "No such folder: $p" >&2; exit 1; }
+  /usr/bin/open -a Terminal "$p"

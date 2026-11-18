@@ -1,0 +1,8 @@
+# Bundled Glint extension: show an address or place in Maps.
+# Hold Option (⌥) to use Google Maps in the browser instead.
+name: Maps
+identifier: dev.saibarath.glint.maps
+description: Show the selected place or address in Apple Maps. Hold ⌥ for Google Maps.
+icon: symbol:map
+url: maps://?q=***
+alternate url: https://www.google.com/maps/search/?api=1&query=***

@@ -14,23 +14,32 @@ public enum Templates {
 
     /// Fills a URL template: `***`, `{glint text}` / `{popclip text}` → encoded text,
     /// `{glint option NAME}` / `{popclip option NAME}` → encoded option values.
-    public static func fillURL(_ template: String, text: String, options: [String: String]) -> String {
+    public static func fillURL(_ template: String, text: String, options: [String: String],
+                               extras: [String: String] = [:]) -> String {
         var out = template.replacingOccurrences(of: "***", with: urlEncode(text))
-        out = replaceTokens(in: out, text: text, options: options, encode: urlEncode)
+        out = replaceTokens(in: out, text: text, options: options, extras: extras, encode: urlEncode)
         return out
     }
 
     /// Fills an AppleScript source: placeholders become AppleScript-string-escaped values,
     /// so `"{glint text}"` is a safe string literal.
-    public static func fillAppleScript(_ source: String, text: String, options: [String: String]) -> String {
-        replaceTokens(in: source, text: text, options: options, encode: appleScriptEscape)
+    public static func fillAppleScript(_ source: String, text: String, options: [String: String],
+                                       extras: [String: String] = [:]) -> String {
+        replaceTokens(in: source, text: text, options: options, extras: extras, encode: appleScriptEscape)
+    }
+
+    /// Extra placeholder values (`{glint url}`, `{glint urls}`, `{glint html}`, `{glint app name}`,
+    /// `{glint bundle identifier}`) built from the input and context.
+    public static func extras(input: ActionInput, context: SelectionContext) -> [String: String] {
+        ["url": input.urls.first ?? "", "urls": input.urls.joined(separator: "\n"), "html": input.html ?? "",
+         "appname": context.appName ?? "", "bundleidentifier": context.appBundleID ?? ""]
     }
 
     public static func appleScriptEscape(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
 
-    static func replaceTokens(in source: String, text: String, options: [String: String],
+    static func replaceTokens(in source: String, text: String, options: [String: String], extras: [String: String] = [:],
                               encode: (String) -> String) -> String {
         let pattern = #"\{(?:glint|popclip)\s+(text|option\s+([A-Za-z0-9_\-]+)|urls?|html|app\s+name|bundle\s+identifier)\}"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return source }
@@ -47,7 +56,7 @@ public enum Templates {
                 let value = options[name] ?? options.first { normalizeKey($0.key) == normalizeKey(name) }?.value ?? ""
                 result += encode(value)
             } else {
-                result += encode(text)
+                result += encode(extras[normalizeKey(token)] ?? (token.hasPrefix("url") ? "" : text))
             }
             last = match.range.location + match.range.length
         }

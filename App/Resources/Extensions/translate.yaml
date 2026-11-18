@@ -1,0 +1,15 @@
+# Bundled Glint extension (enabled by default): translate with Google Translate.
+# The target language is an extension option, filled into the URL with {glint option lang}.
+name: Translate
+identifier: dev.saibarath.glint.translate
+description: Translate the selection with Google Translate. Pick the target language in the extension's settings.
+icon: symbol:translate
+options:
+  - identifier: lang
+    label: Translate to
+    type: multiple
+    default value: en
+    values: [en, es, fr, de, it, pt, nl, ru, ar, hi, ta, ja, ko, zh-CN, zh-TW]
+    value labels: [English, Spanish, French, German, Italian, Portuguese, Dutch, Russian, Arabic, Hindi, Tamil,
+                   Japanese, Korean, Chinese (Simplified), Chinese (Traditional)]
+url: https://translate.google.com/?sl=auto&tl={glint option lang}&text=***&op=translate

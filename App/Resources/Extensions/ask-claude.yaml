@@ -1,0 +1,6 @@
+# Bundled Glint extension: start a new Claude chat with the selection as the prompt.
+name: Ask Claude
+identifier: dev.saibarath.glint.ask-claude
+description: Open a new chat on claude.ai with the selected text as the prompt.
+icon: symbol:sparkles
+url: https://claude.ai/new?q=***

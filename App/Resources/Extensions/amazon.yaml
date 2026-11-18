@@ -1,0 +1,6 @@
+# Bundled Glint extension: product search.
+name: Amazon
+identifier: dev.saibarath.glint.amazon
+description: Search Amazon for the selected product name.
+icon: symbol:cart
+url: https://www.amazon.com/s?k=***
