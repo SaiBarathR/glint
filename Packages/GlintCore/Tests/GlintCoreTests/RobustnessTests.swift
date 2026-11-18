@@ -237,3 +237,69 @@ final class ReviewRoundThreeTests: XCTestCase {
         XCTAssertLessThan(afterDeadline, 15)
     }
 }
+
+final class ReviewRoundFourTests: XCTestCase {
+    func testDynamicActionResolvedByTitle() async throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        // #glint
+        // name: Dyn
+        // language: javascript
+        // module: true
+        exports.actions = function(input, options, context) {
+          var a = { title: 'A', code: function() { return 'ran A'; } };
+          var b = { title: 'B', code: function() { return 'ran B'; } };
+          return glint.modifiers.shift ? [b, a] : [a, b];
+        };
+        """)
+        let ctx = SelectionContext(text: "x")
+        let runtime = ExtensionRuntime(host: nil)
+        let built = runtime.populateDynamic(m, input: ActionInput(text: "x"), context: ctx, modifiers: [], options: [:])
+        XCTAssertEqual(built.map(\.title), ["A", "B"])
+        // Clicked "A" (index 0) while holding shift, which reorders the list at run time.
+        let out = await runtime.perform(built[0], of: m, input: ActionInput(text: "x"), context: ctx, modifiers: .shift,
+                                        options: [:], dynamicIndex: 0)
+        XCTAssertEqual(out, .result("ran A"))
+    }
+
+    func testFetchContinuationAfterTimeoutDoesNotReachHost() async throws {
+        // A local server that answers after 2 s.
+        let server = Process()
+        server.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        server.arguments = ["-c", """
+        import http.server, time
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                time.sleep(2); self.send_response(200); self.end_headers(); self.wfile.write(b'late')
+            def log_message(self, *a): pass
+        http.server.HTTPServer(('127.0.0.1', 47815), H).serve_forever()
+        """]
+        try server.run()
+        defer { server.terminate() }
+        try await Task.sleep(nanoseconds: 700_000_000)
+        let host = MockHost()
+        let env = JavaScriptRunner.Environment(input: ActionInput(text: "a"), context: SelectionContext(text: "a"),
+                                               modifiers: [], options: [:], extensionID: "t", bundleURL: nil)
+        let out = await JavaScriptRunner.run(.inline(
+            "return fetch('http://127.0.0.1:47815/').then(function(r) { return r.text(); }).then(function(t) { glint.pasteText(t); return t; });"),
+                                             env: env, host: host, timeout: 1)
+        if case .failure = out {} else { XCTFail("expected timeout, got \(out)") }
+        try await Task.sleep(nanoseconds: 2_500_000_000)
+        XCTAssertTrue(host.pasted.isEmpty, "late fetch continuation pasted \(host.pasted)")
+    }
+
+    func testBrowserURLIsCapped() {
+        let m = ExtensionManifest(identifier: "t", name: "T", actions: [])
+        let env = ExtensionRuntime.environment(manifest: m, input: ActionInput(text: "a"),
+                                               context: SelectionContext(text: "a", sourceURL: "data:" + String(repeating: "x", count: 600_000)),
+                                               modifiers: [], options: [:])
+        XCTAssertEqual(env["GLINT_BROWSER_URL"], "")
+    }
+
+    func testDotIdentifierInstallsVisibly() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try ExtensionLoader.installSnippet("#glint\nname: Dot\nidentifier: .foo\nurl: https://x/***", into: dir)
+        XCTAssertEqual(ExtensionLoader.loadAll(in: dir).extensions.map(\.name), ["Dot"])
+    }
+}

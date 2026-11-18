@@ -141,8 +141,10 @@ public enum JavaScriptRunner {
 
     /// - Parameter sandboxed: no network, timers or sleeping. Used whenever code runs without the user
     ///   having asked for an action (describing a module before install, building the bar).
-    static func makeContext(env: Environment?, host: ActionHost?, errors: Box<String?>, timeLimit: Double = 30,
-                            sandboxed: Bool = false) -> JSContext {
+    static func makeContext(env: Environment?, host liveHost: ActionHost?, errors: Box<String?>, timeLimit: Double = 30,
+                            sandboxed: Bool = false, expired: Box<Bool> = Box(false)) -> JSContext {
+        // Once the action has timed out, late continuations (e.g. a fetch resolving) must not reach the host.
+        var host: ActionHost? { expired.value ? nil : liveHost }
         let allowSleep = !sandboxed
         let ctx = JSContext()!
         applyTimeLimit(ctx, seconds: timeLimit)
@@ -201,7 +203,7 @@ public enum JavaScriptRunner {
             // Keep the host alive until the callback has run: it may call glint.* after the action returned.
             DispatchQueue.global().asyncAfter(deadline: .now() + ms / 1000) {
                 guard Date() < deadline else { return }
-                withExtendedLifetime(host) { _ = fn.call(withArguments: []) }
+                withExtendedLifetime(liveHost) { _ = fn.call(withArguments: []) }
             }
         }
         let htmlToText: @convention(block) (String) -> String = { html in
@@ -238,7 +240,7 @@ public enum JavaScriptRunner {
                 if !body.isNull, !body.isUndefined, let s = body.toString() { request.httpBody = Data(s.utf8) }
                 URLSession.shared.dataTask(with: request) { data, response, error in
                     // Promise continuations may call glint.* after the action returned; keep the host alive.
-                    defer { withExtendedLifetime(host) {} }
+                    defer { withExtendedLifetime(liveHost) {} }
                     if let error { reject?.call(withArguments: [error.localizedDescription]); return }
                     let http = response as? HTTPURLResponse
                     var hdrs: [String: String] = [:]
@@ -375,12 +377,13 @@ public enum JavaScriptRunner {
     }
 
     public static func run(_ code: Code, env: Environment, host: ActionHost?, dynamicIndex: Int? = nil,
-                           timeout: TimeInterval = 30) async -> ActionOutcome {
+                           dynamicTitle: String? = nil, timeout: TimeInterval = 30) async -> ActionOutcome {
         await withCheckedContinuation { (cont: CheckedContinuation<ActionOutcome, Never>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 let once = ResumeOnce(cont)
                 let errors = Box<String?>(nil)
-                let ctx = makeContext(env: env, host: host, errors: errors, timeLimit: timeout)
+                let expired = Box(false)
+                let ctx = makeContext(env: env, host: host, errors: errors, timeLimit: timeout, expired: expired)
                 var value: JSValue?
                 switch code {
                 case .inline(let src):
@@ -402,7 +405,16 @@ public enum JavaScriptRunner {
                             target = actions.atIndex(index)
                         } else if let actions = exports.forProperty("actions"), isFunction(actions) {
                             if let list = actions.call(withArguments: args) {
-                                target = list.isArray ? list.atIndex(dynamicIndex ?? index) : list
+                                if list.isArray {
+                                    // Input may differ from when the bar was built: find the clicked action by title.
+                                    let count = Int(list.forProperty("length").toInt32())
+                                    let byTitle = dynamicTitle.flatMap { title in
+                                        (0..<count).map { list.atIndex($0)! }.first { $0.forProperty("title")?.toString() == title }
+                                    }
+                                    target = byTitle ?? list.atIndex(dynamicIndex ?? index)
+                                } else {
+                                    target = list
+                                }
                             }
                         } else {
                             target = exports.forProperty("action")
@@ -425,7 +437,7 @@ public enum JavaScriptRunner {
                     }
                     value.invokeMethod("then", withArguments: [JSValue(object: onResolve, in: ctx)!, JSValue(object: onReject, in: ctx)!])
                     DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                        once.resume(.failure("Timed out after \(Int(timeout))s"))
+                        if once.resume(.failure("Timed out after \(Int(timeout))s")) { expired.value = true }
                     }
                 } else {
                     once.resume(outcome(from: value))
@@ -447,10 +459,14 @@ public enum JavaScriptRunner {
         private var cont: CheckedContinuation<ActionOutcome, Never>?
         private let lock = NSLock()
         init(_ c: CheckedContinuation<ActionOutcome, Never>) { cont = c }
-        func resume(_ outcome: ActionOutcome) {
+        /// Returns true when this call was the one that resumed.
+        @discardableResult
+        func resume(_ outcome: ActionOutcome) -> Bool {
             lock.lock(); defer { lock.unlock() }
-            cont?.resume(returning: outcome)
+            guard let c = cont else { return false }
+            c.resume(returning: outcome)
             cont = nil
+            return true
         }
     }
 }

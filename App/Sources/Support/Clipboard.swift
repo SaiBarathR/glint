@@ -57,8 +57,10 @@ enum Clipboard {
     /// Puts the borrowed clipboard back after `delay`, unless borrowed again meanwhile.
     static func scheduleReturn(after delay: TimeInterval = 0.6) {
         restoreWork?.cancel()
+        let gen = generation
         let work = DispatchWorkItem {
-            if let s = borrowed { restore(s) }
+            // The user copied something meanwhile: their copy wins.
+            if let s = borrowed, generation == gen { restore(s) }
             borrowed = nil
             restoreWork = nil
         }
@@ -127,7 +129,8 @@ enum Clipboard {
             return nil
         }
         return await MainActor.run {
-            defer { restore(before) }
+            // Put the user's clipboard back, unless they copied something themselves in the meantime.
+            defer { if generation == gen { restore(before) } }
             if Task.isCancelled { return nil }
             let types = pb.types ?? []
             if types.contains(.fileURL), !types.contains(.rtf), !types.contains(.html) { return nil }

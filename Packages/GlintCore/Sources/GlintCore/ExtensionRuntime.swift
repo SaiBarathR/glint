@@ -69,7 +69,7 @@ public final class ExtensionRuntime {
                                                    optionSpecs: manifest.options, extensionID: manifest.identifier,
                                                    bundleURL: manifest.bundleURL)
             return await JavaScriptRunner.run(.module(source: source, actionIndex: index), env: env, host: host,
-                                              dynamicIndex: dynamicIndex)
+                                              dynamicIndex: dynamicIndex, dynamicTitle: dynamicIndex != nil ? action.title : nil)
 
         case .native:
             return .failure("Native actions are handled by the app")
@@ -133,7 +133,7 @@ public final class ExtensionRuntime {
             "MODIFIER_FLAGS": String(modifiers.rawValue),
             "EXTENSION_IDENTIFIER": manifest.identifier,
             "EXTENSION_PATH": manifest.bundleURL?.path ?? "",
-            "BROWSER_URL": context.sourceURL ?? "",
+            "BROWSER_URL": capped(context.sourceURL ?? ""),
             "HTML": capped(input.html ?? ""),
             "MARKDOWN": capped(input.text),
         ]
@@ -148,7 +148,7 @@ public final class ExtensionRuntime {
         func total() -> Int { base.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count + 16 } * 2 }
         let regexKeys = base.keys.filter { $0.hasPrefix("REGEX_GROUP_") }.sorted { $0.count != $1.count ? $0.count > $1.count : $0 > $1 }
         let optionKeys = base.keys.filter { $0.hasPrefix("OPTION_") }.sorted()
-        let order = ["HTML", "MARKDOWN", "FULL_TEXT"] + regexKeys + ["URLS"] + optionKeys + ["TEXT"]
+        let order = ["HTML", "MARKDOWN", "FULL_TEXT", "BROWSER_URL"] + regexKeys + ["URLS"] + optionKeys + ["TEXT"]
         for key in order where total() > budget {
             guard let v = base[key], !v.isEmpty else { continue }
             base[key] = ""
@@ -203,6 +203,7 @@ public final class ExtensionRuntime {
                               kind: .jsModuleAction(index: i), requirements: [],
                               after: c.string("after").map { AfterAction(config: $0) } ?? parent?.after ?? .none,
                               stayVisible: c.bool("stay visible") ?? parent?.stayVisible ?? false,
+                              restoreClipboard: c.bool("restore pasteboard") ?? parent?.restoreClipboard ?? false,
                               captureHTML: c.bool("capture html") ?? parent?.captureHTML ?? false)
         }
     }

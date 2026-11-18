@@ -10,12 +10,14 @@ struct CapturedSelection {
     var isPasteOnly: Bool
     /// The app and text element the selection lives in, to check later that a paste still lands there.
     var pid: pid_t = 0
+    /// The frontmost app at capture time (differs from `pid` for launcher panels like Spotlight).
+    var frontPID: pid_t = 0
     var element: AXUIElement?
 
     /// True while the same app is frontmost and the same element still has keyboard focus.
     func isStillFocused() -> Bool {
-        guard pid != 0 else { return true }
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return false }
+        guard frontPID != 0 else { return true }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == frontPID else { return false }
         guard let element else { return true }
         guard let now = AX.focusedElement() else { return true }
         return CFEqual(now, element)
@@ -34,6 +36,7 @@ enum SelectionReader {
                         requireNearMouse: Bool = false) async -> CapturedSelection? {
         let prefs = Preferences.shared
         guard var app = NSWorkspace.shared.frontmostApplication, app.bundleIdentifier != ownBundleID else { return nil }
+        let frontPID = app.processIdentifier
         if prefs.isExcluded(bundleID: app.bundleIdentifier) { return nil }
         // The focused element can belong to another process (Spotlight, launcher panels): use its owner.
         if let el = AX.focusedElement(), let ownerPID = AX.pid(el), ownerPID != app.processIdentifier,
@@ -104,6 +107,7 @@ enum SelectionReader {
             let m = NSEvent.mouseLocation
             anchor = CGRect(x: m.x - 1, y: m.y - 8, width: 2, height: 16)
         }
-        return CapturedSelection(context: context, anchor: anchor, isPasteOnly: pasteOnly, pid: pid, element: element)
+        return CapturedSelection(context: context, anchor: anchor, isPasteOnly: pasteOnly, pid: pid,
+                                 frontPID: frontPID, element: element)
     }
 }

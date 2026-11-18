@@ -14,6 +14,8 @@ final class ActionPerformer: ActionHost {
     private(set) var log: [String] = []
 
     func perform(_ action: BarAction, flags: NSEvent.ModifierFlags) {
+        // Any action may write the clipboard (Copy, Cut, results): an older late-⌘C watcher must not undo it.
+        Clipboard.noteUserCopy()
         let mods = ModifierState(rawValue: Int(flags.rawValue) & (ModifierState.shift.rawValue | ModifierState.control.rawValue
                                                                   | ModifierState.option.rawValue | ModifierState.command.rawValue))
         guard let selection else { return }
@@ -261,7 +263,18 @@ final class SessionHost: ActionHost {
         return DispatchQueue.main.sync { performer.session == session }
     }
 
-    private var canDeliverInput: Bool { isCurrent && selection.isStillFocused() }
+    /// The selection is current and its field has focus. Off the main thread, waits up to a second for focus
+    /// to come back (e.g. after the action's own dialog closes) before giving up.
+    private var canDeliverInput: Bool {
+        guard isCurrent else { return false }
+        if selection.isStillFocused() { return true }
+        guard !Thread.isMainThread else { return false }
+        for _ in 0..<20 {
+            Thread.sleep(forTimeInterval: 0.05)
+            if selection.isStillFocused() { return isCurrent }
+        }
+        return false
+    }
 
     func pasteText(_ text: String, restoreClipboard: Bool) {
         if canDeliverInput { performer.pasteText(text, restoreClipboard: restoreClipboard) } else { performer.copyText(text) }

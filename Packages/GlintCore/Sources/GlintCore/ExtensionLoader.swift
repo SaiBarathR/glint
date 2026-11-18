@@ -87,6 +87,7 @@ public enum ExtensionLoader {
                                           after: AfterAction(config: defaults.after),
                                           requiredApps: defaults.apps, excludedApps: defaults.excludedApps,
                                           stayVisible: defaults.stayVisible ?? false,
+                                          restoreClipboard: defaults.restoreClipboard ?? false,
                                           captureHTML: defaults.captureHTML ?? false))
                 continue
             }
@@ -100,6 +101,7 @@ public enum ExtensionLoader {
                                       excludedApps: nonEmpty(ManifestParser.ActionDefaults.bundleIDs(ac["excluded apps"]))
                                           ?? defaults.excludedApps,
                                       stayVisible: ac.bool("stay visible") ?? defaults.stayVisible ?? false,
+                                      restoreClipboard: ac.bool("restore pasteboard") ?? defaults.restoreClipboard ?? false,
                                       captureHTML: ac.bool("capture html") ?? defaults.captureHTML ?? false))
         }
         if let err = info.error, actions.isEmpty { throw ManifestError.unreadable("JavaScript error: \(err)") }
@@ -190,7 +192,9 @@ public enum ExtensionLoader {
     @discardableResult
     public static func installSnippet(_ text: String, into directory: URL) throws -> URL {
         let manifest = try parseSnippet(text)
-        let safe = manifest.identifier.replacingOccurrences(of: "/", with: "-")
+        var safe = manifest.identifier.replacingOccurrences(of: "/", with: "-")
+        while safe.hasPrefix(".") { safe.removeFirst() } // hidden folders are never loaded
+        if safe.isEmpty { safe = "extension-\(UUID().uuidString.prefix(8))" }
         let folder = directory.appendingPathComponent(safe + ".glintext", isDirectory: true)
         let fm = FileManager.default
         if fm.fileExists(atPath: folder.path) { try fm.removeItem(at: folder) }
