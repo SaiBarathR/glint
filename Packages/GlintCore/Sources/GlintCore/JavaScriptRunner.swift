@@ -142,7 +142,8 @@ public enum JavaScriptRunner {
     /// - Parameter sandboxed: no network, timers or sleeping. Used whenever code runs without the user
     ///   having asked for an action (describing a module before install, building the bar).
     static func makeContext(env: Environment?, host liveHost: ActionHost?, errors: Box<String?>, timeLimit: Double = 30,
-                            sandboxed: Bool = false, expired: Box<Bool> = Box(false)) -> JSContext {
+                            sandboxed: Bool = false, expired: Box<Bool> = Box(false),
+                            bundleURL explicitBundleURL: URL? = nil) -> JSContext {
         // Once the action has timed out, late continuations (e.g. a fetch resolving) must not reach the host.
         var host: ActionHost? { expired.value ? nil : liveHost }
         let allowSleep = !sandboxed
@@ -212,13 +213,18 @@ public enum JavaScriptRunner {
         let clipboardText: @convention(block) () -> String = {
             host?.currentClipboardText() ?? env?.context.clipboardText ?? ""
         }
-        let bundleURL = env?.bundleURL
+        let bundleURL = env?.bundleURL ?? explicitBundleURL
         let readModule: @convention(block) (String) -> JSValue? = { path in
             guard let bundleURL else { return JSValue(nullIn: JSContext.current()) }
             var p = path
             if p.hasPrefix("./") { p.removeFirst(2) }
             var url = bundleURL.appendingPathComponent(p)
             if url.pathExtension.isEmpty { url.appendPathExtension("js") }
+            // Modules may only come from inside the extension's own folder.
+            let root = bundleURL.standardizedFileURL.resolvingSymlinksInPath().path + "/"
+            guard url.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix(root) else {
+                return JSValue(nullIn: JSContext.current())
+            }
             guard let src = try? String(contentsOf: url, encoding: .utf8) else { return JSValue(nullIn: JSContext.current()) }
             return JSValue(object: src, in: JSContext.current())
         }
@@ -295,9 +301,9 @@ public enum JavaScriptRunner {
 
     // MARK: - Module description
 
-    public static func describeModule(source: String) -> ModuleInfo {
+    public static func describeModule(source: String, bundleURL: URL? = nil) -> ModuleInfo {
         let errors = Box<String?>(nil)
-        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 1, sandboxed: true)
+        let ctx = makeContext(env: nil, host: nil, errors: errors, timeLimit: 1, sandboxed: true, bundleURL: bundleURL)
         ctx.evaluateScript(source)
         var info = ModuleInfo()
         let exports = moduleExports(ctx)

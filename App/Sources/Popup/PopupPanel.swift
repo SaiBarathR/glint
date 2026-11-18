@@ -142,7 +142,7 @@ final class HoverLabelPanel: NSPanel {
         box.layer?.borderColor = style.border.cgColor
         box.layer?.borderWidth = 1
         field.sizeToFit()
-        let w = min(ceil(field.frame.width) + 16, 320), h: CGFloat = 22
+        let w = min(ceil(field.frame.width) + 16, 560), h: CGFloat = 22
         field.frame = NSRect(x: 8, y: (h - field.frame.height) / 2, width: w - 16, height: field.frame.height)
         var origin = NSPoint(x: rect.midX - w / 2, y: preferBelow ? rect.minY - h - 4 : rect.maxY + 4)
         if let screen = NSScreen.screens.first(where: { $0.frame.intersects(rect) }) ?? NSScreen.main {

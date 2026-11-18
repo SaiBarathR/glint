@@ -43,18 +43,22 @@ public enum Calculator {
     }
 
     public static func format(_ value: Double) -> String {
-        // Doubles are exact only up to 2^53: beyond 1e15 show scientific notation rather than invented digits.
+        guard value.isFinite else { return "\(value)" }
+        // Integers are exact up to 2^53: print them in full.
+        if value == value.rounded(), abs(value) <= 9_007_199_254_740_992 {
+            return value == 0 ? "0" : String(format: "%.0f", value)
+        }
+        // Beyond that (or huge fractions) only ~15 significant digits are real.
         if abs(value) >= 1e15 { return String(format: "%.15g", value) }
-        // Round to the shown precision first, so float noise (0.3-0.2-0.1) is 0, never "-0".
-        let rounded = (value * 1e10).rounded() / 1e10
-        if rounded == 0 { return "0" }
-        if rounded == rounded.rounded() { return String(format: "%.0f", rounded) }
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.usesGroupingSeparator = false
-        f.maximumFractionDigits = 10
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: NSNumber(value: rounded)) ?? "\(rounded)"
+        // Up to 10 decimals, but never more than 15 significant digits (427452.59, not 427452.5900000001).
+        let integerDigits = abs(value) < 1 ? 1 : Int(floor(log10(abs(value)))) + 1
+        let places = max(0, min(10, 15 - integerDigits))
+        var s = String(format: "%.\(places)f", value)
+        if s.contains(".") {
+            while s.hasSuffix("0") { s.removeLast() }
+            if s.hasSuffix(".") { s.removeLast() }
+        }
+        return s == "-0" ? "0" : s
     }
 
     private struct Parser {

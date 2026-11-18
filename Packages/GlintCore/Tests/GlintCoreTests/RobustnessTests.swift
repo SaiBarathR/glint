@@ -389,3 +389,33 @@ final class ReviewRoundFifteenTests: XCTestCase {
         XCTAssertEqual(ContentDetector.detect(in: "999999*1000").mathResult, "999999000")
     }
 }
+
+final class ReviewRoundSixteenTests: XCTestCase {
+    func testSignificantDigits() {
+        XCTAssertEqual(Calculator.format(427000 + 452.59), "427452.59")
+        XCTAssertEqual(Calculator.format(89999.99 * 12), "1079999.88")
+        XCTAssertEqual(Calculator.format(pow(2, 50)), "1125899906842624")
+        XCTAssertEqual(Calculator.format(5e15 - 1), "4999999999999999")
+        XCTAssertEqual(Calculator.format(10.0 / 3), "3.3333333333")
+        XCTAssertEqual(Calculator.format(-0.0), "0")
+        XCTAssertEqual(Calculator.format(0.3 - 0.2 - 0.1), "0")
+        XCTAssertEqual(Calculator.format(pow(2, 64)), "1.84467440737096e+19")
+    }
+
+    func testTopLevelRequireInBundle() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let bundle = dir.appendingPathComponent("Lib.glintext")
+        try fm.createDirectory(at: bundle, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        try "exports.shout = function(s) { return s.toUpperCase() + '!'; };".write(to: bundle.appendingPathComponent("lib.js"), atomically: true, encoding: .utf8)
+        try "secret".write(to: dir.appendingPathComponent("outside.js"), atomically: true, encoding: .utf8)
+        try """
+        const lib = require('./lib');
+        var escaped = true; try { require('../outside'); } catch (e) { escaped = false; }
+        module.exports = { name: 'Lib', actions: [{ title: escaped ? 'ESCAPED' : 'A', code: function(i) { return lib.shout(i.text); } }] };
+        """.write(to: bundle.appendingPathComponent("Config.js"), atomically: true, encoding: .utf8)
+        let m = try ExtensionLoader.loadBundle(at: bundle)
+        XCTAssertEqual(m.actions.map(\.title), ["A"])
+    }
+}

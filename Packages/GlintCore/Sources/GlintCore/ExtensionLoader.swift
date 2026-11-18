@@ -69,7 +69,7 @@ public enum ExtensionLoader {
     /// The static parts (name, icon, options) are read by evaluating the module once.
     public static func loadJavaScriptModule(source: String, bundleURL: URL?, isBuiltIn: Bool,
                                             snippetSource: String? = nil, headerConfig: [String: Any] = [:]) throws -> ExtensionManifest {
-        let info = JavaScriptRunner.describeModule(source: source)
+        let info = JavaScriptRunner.describeModule(source: source, bundleURL: bundleURL)
         var dict = headerConfig
         for (k, v) in info.config where dict[k] == nil { dict[k] = v }
         if dict["name"] == nil { dict["name"] = bundleURL?.deletingPathExtension().lastPathComponent ?? "JavaScript Extension" }

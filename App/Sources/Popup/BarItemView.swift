@@ -25,6 +25,7 @@ final class BarItemView: NSView {
     private var hovering = false { didSet { needsDisplay = true } }
     private var pressing = false { didSet { needsDisplay = true } }
     private(set) var showsTitle = false
+    var visibleTitle: String? { showsTitle ? title : nil }
     private var image: NSImage?
     private var title: String?
 
@@ -40,7 +41,9 @@ final class BarItemView: NSView {
                                        owner: self, userInfo: nil))
         setAccessibilityElement(true)
         setAccessibilityRole(item.handler == nil ? .staticText : .button)
-        setAccessibilityLabel(item.tooltip ?? title ?? "")
+        // Read the content itself; the tooltip ("Click to copy") is a hint.
+        setAccessibilityLabel(title ?? item.tooltip ?? "")
+        if let tip = item.tooltip, tip != title { setAccessibilityHelp(tip) }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -80,6 +83,17 @@ final class BarItemView: NSView {
         if case .label = item.kind, item.handler == nil { color = style.foreground }
         return NSAttributedString(string: title.replacingOccurrences(of: "\n", with: " ⏎ "),
                                   attributes: [.font: style.font, .foregroundColor: color, .paragraphStyle: para])
+    }
+
+    /// The title doesn't fit and is shown truncated.
+    var isTruncated: Bool { naturalWidth > Self.maxLabelWidth }
+
+    /// Width the content would need without a cap.
+    private var naturalWidth: CGFloat {
+        var w: CGFloat = 0
+        if let image { w += imageSize(image).width }
+        if let t = attributedTitle { w += (image != nil ? 6 : 0) + ceil(t.size().width) }
+        return w + style.hPadding * 2
     }
 
     var intrinsicWidth: CGFloat {

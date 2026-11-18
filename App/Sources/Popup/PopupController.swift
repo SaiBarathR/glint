@@ -40,7 +40,7 @@ final class PopupController {
 
     func showResult(_ text: String, preview: Bool) {
         let style = BarStyle.current()
-        var item = BarItem(kind: .label(text), tooltip: preview ? "Click to copy" : nil)
+        var item = BarItem(kind: .label(text), tooltip: preview ? "Click to copy" : (text.count > 60 ? text : nil))
         if preview {
             item.handler = { [weak self] _ in
                 Clipboard.copy(text)
@@ -230,7 +230,9 @@ final class PopupController {
 
     private func hoverChanged(_ v: BarItemView, inside: Bool, style: BarStyle) {
         guard Preferences.shared.showHoverLabels else { return }
-        guard inside, !v.showsTitle, let tip = v.item.tooltip, v.item.handler != nil else {
+        // Show for icon-only items, truncated titles, and hints that differ from the visible text.
+        guard inside, let tip = v.item.tooltip, v.item.handler != nil,
+              !v.showsTitle || v.isTruncated || tip != v.visibleTitle else {
             hoverLabel.orderOut(nil)
             return
         }
