@@ -484,3 +484,22 @@ final class ReviewRoundEighteenTests: XCTestCase {
         wait(for: [exp], timeout: 10)
     }
 }
+
+final class ReviewRoundNineteenTests: XCTestCase {
+    func testFailedModuleIsNotCached() async throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        try "exports.partial = 1; throw new Error('boom');".write(to: dir.appendingPathComponent("bad.js"), atomically: true, encoding: .utf8)
+        let env = JavaScriptRunner.Environment(input: ActionInput(text: "a"), context: SelectionContext(text: "a"),
+                                               modifiers: [], options: [:], extensionID: "t", bundleURL: dir)
+        let out = await JavaScriptRunner.run(.inline("""
+        var first = 'none', second = 'none';
+        try { require('./bad'); } catch (e) { first = 'threw'; }
+        try { require('./bad'); second = 'cached'; } catch (e) { second = 'threw'; }
+        return first + '/' + second;
+        """), env: env, host: nil)
+        XCTAssertEqual(out, .result("threw/threw"))
+    }
+}

@@ -69,42 +69,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     }
 
     private func installBundle(at original: URL) {
-        var url = original
+        NSApp.activate(ignoringOtherApps: true)
         do {
-            // Zipped packages (.glintextz / .popclipextz): expand first.
-            if ["glintextz", "popclipextz", "zip"].contains(url.pathExtension.lowercased()) {
-                url = try Self.unzipExtension(url)
+            // Zipped packages (.glintextz / .popclipextz / .zip) may hold one or several extensions.
+            var bundles = [original]
+            var unzipped: Unzipped?
+            if Self.isZippedExtension(original) {
+                unzipped = try Self.unzipExtensions(original)
+                bundles = unzipped!.bundles
             }
-            let manifest = try ExtensionLoader.loadBundle(at: url)
-            NSApp.activate(ignoringOtherApps: true)
-            let alert = NSAlert()
-            alert.messageText = "Install “\(manifest.name)”?"
-            let kinds = manifest.actions.map(\.title).joined(separator: ", ")
-            alert.informativeText = "\(manifest.description ?? "")\n\nActions: \(kinds)\n\nOnly install extensions from people you trust: they can run scripts on your Mac."
-            alert.addButton(withTitle: "Install")
-            alert.addButton(withTitle: "Cancel")
-            if alert.runModal() == .alertFirstButtonReturn {
-                try ActionRegistry.shared.install(bundleAt: url)
-                SettingsWindowController.shared.show(extensionKey: manifest.identifier)
+            defer { unzipped?.cleanUp() }
+            for url in bundles {
+                let manifest = try ExtensionLoader.loadBundle(at: url)
+                let alert = NSAlert()
+                alert.messageText = "Install “\(manifest.name)”?"
+                let kinds = manifest.actions.map(\.title).joined(separator: ", ")
+                alert.informativeText = "\(manifest.description ?? "")\n\nActions: \(kinds)\n\nOnly install extensions from people you trust: they can run scripts on your Mac."
+                alert.addButton(withTitle: "Install")
+                alert.addButton(withTitle: "Cancel")
+                if alert.runModal() == .alertFirstButtonReturn {
+                    try ActionRegistry.shared.install(bundleAt: url)
+                    SettingsWindowController.shared.show(extensionKey: manifest.identifier)
+                }
             }
         } catch {
-            NSApp.activate(ignoringOtherApps: true)
-            NSAlert(error: error).runModal()
+            let alert = NSAlert()
+            alert.messageText = "Couldn't install “\(original.lastPathComponent)”"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
         }
     }
 
-    static func unzipExtension(_ zip: URL) throws -> URL {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("glint-unzip-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    static func isZippedExtension(_ url: URL) -> Bool {
+        ["glintextz", "popclipextz", "zip"].contains(url.pathExtension.lowercased())
+    }
+
+    /// Extension bundles found in an expanded zip, plus the temporary folder to remove afterwards.
+    struct Unzipped {
+        let bundles: [URL]
+        let tempDir: URL
+        func cleanUp() { try? FileManager.default.removeItem(at: tempDir) }
+    }
+
+    struct UnzipError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    /// Expands a zipped extension and finds the bundles in it: a config at the zip's root (installed under the
+    /// zip's name, so reinstalls update it), `.glintext` / `.popclipext` folders, or one wrapper folder.
+    static func unzipExtensions(_ zip: URL) throws -> Unzipped {
+        let fm = FileManager.default
+        let temp = fm.temporaryDirectory.appendingPathComponent("glint-unzip-\(UUID().uuidString)", isDirectory: true)
+        // Extract into a folder named after the zip, so a flat zip becomes "<name>.glintext".
+        let base = zip.deletingPathExtension().lastPathComponent
+        let root = temp.appendingPathComponent(base + ".glintext", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        p.arguments = ["-x", "-k", zip.path, dir.path]
+        p.arguments = ["-x", "-k", zip.path, root.path]
+        p.standardError = FileHandle.nullDevice
         try p.run()
         p.waitUntilExit()
-        let items = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
-        if let bundle = items.first(where: { ["glintext", "popclipext"].contains($0.pathExtension.lowercased()) }) { return bundle }
-        if items.count == 1 { return items[0] }
-        return dir
+        guard p.terminationStatus == 0 else {
+            try? fm.removeItem(at: temp)
+            throw UnzipError(message: "Couldn't unzip “\(zip.lastPathComponent)”. The file may be damaged.")
+        }
+        let found = findBundles(in: root, depth: 0)
+        guard !found.isEmpty else {
+            try? fm.removeItem(at: temp)
+            throw UnzipError(message: "“\(zip.lastPathComponent)” doesn't contain a Glint or PopClip extension.")
+        }
+        return Unzipped(bundles: found, tempDir: temp)
+    }
+
+    private static func findBundles(in dir: URL, depth: Int) -> [URL] {
+        let fm = FileManager.default
+        if ExtensionLoader.configNames.contains(where: { fm.fileExists(atPath: dir.appendingPathComponent($0).path) })
+            || fm.fileExists(atPath: dir.appendingPathComponent("Snippet.txt").path) {
+            return [dir]
+        }
+        let items = ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey],
+                                                  options: [.skipsHiddenFiles])) ?? [])
+            .filter { $0.lastPathComponent != "__MACOSX" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let bundles = items.filter { ExtensionLoader.bundleExtensions.contains($0.pathExtension.lowercased()) }
+        if !bundles.isEmpty { return bundles }
+        // A single wrapper folder (e.g. "repo-main/"): look inside it.
+        let dirs = items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        if depth < 2, dirs.count == 1 { return findBundles(in: dirs[0], depth: depth + 1) }
+        return []
     }
 
     /// glint://install?snippet=<url-encoded snippet>, glint://settings, glint://pause, glint://resume

@@ -43,8 +43,8 @@ final class PopupController {
 
     func showResult(_ text: String, preview: Bool) {
         let style = BarStyle.current()
-        // Hovering a cut-off result shows all of it (plus the hint for previews).
-        var item = BarItem(kind: .label(text), tooltip: preview ? text + "\n\nClick to copy" : text)
+        // Previews carry the hint; hovering a cut-off or multi-line result also shows all of it (see hoverChanged).
+        var item = BarItem(kind: .label(text), tooltip: preview ? "Click to copy" : text)
         if preview {
             item.handler = { [weak self] _ in
                 Clipboard.copy(text)
@@ -255,8 +255,13 @@ final class PopupController {
             hoverLabel.orderOut(nil)
             return
         }
+        // A cut-off or multi-line result shows its full text, after the hint when there is one.
+        var shown = tip
+        if case .label(let full) = v.item.kind, v.isTruncated || full.contains("\n") {
+            shown = tip == full ? full : tip + "\n\n" + full
+        }
         let rectInWindow = v.convert(v.bounds, to: nil)
         let screenRect = panel.convertToScreen(rectInWindow)
-        hoverLabel.show(tip, above: screenRect, style: style, preferBelow: !(content?.arrowPointsDown ?? true))
+        hoverLabel.show(shown, above: screenRect, style: style, preferBelow: !(content?.arrowPointsDown ?? true))
     }
 }

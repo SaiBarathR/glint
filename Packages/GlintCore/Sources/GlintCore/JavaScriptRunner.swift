@@ -80,7 +80,12 @@ public enum JavaScriptRunner {
         if (r.json) { var data = { exports: JSON.parse(r.source) }; __moduleCache[r.path] = data; return data.exports; }
         var m = { exports: {} };
         __moduleCache[r.path] = m;
-        (new Function('module', 'exports', 'require', r.source))(m, m.exports, __makeRequire(r.dir));
+        try {
+          (new Function('module', 'exports', 'require', r.source))(m, m.exports, __makeRequire(r.dir));
+        } catch (e) {
+          delete __moduleCache[r.path]; // a module that failed must fail again, not return half-built exports
+          throw e;
+        }
         return m.exports;
       };
     }

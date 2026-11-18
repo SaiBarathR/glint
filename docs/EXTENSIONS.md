@@ -524,7 +524,7 @@ a module and its first action runs.
 | `util.sleep(ms)` / `sleep(ms)`, `util.timeoutPromise(ms)`, `setTimeout(fn, ms)` | Timing helpers (sleep is capped at 10 s). |
 | `fetch(url, {method, headers, body})` | Network request, resolving to `{status, ok, headers, text(), json()}`. |
 | `require('axios')` | A small axios-compatible client: `get`, `post`, `put`, `delete`, `request`, `create({baseURL, headers})`. Resolves to `{status, data, headers}`; rejects with `err.response` on non-2xx. |
-| `require('./lib.js')` | Load a CommonJS file from the bundle folder (the `.js` extension is optional). |
+| `require('./lib.js')` | Load a CommonJS file, relative to the file calling `require` and only from inside the extension's folder. The `.js` extension is optional, `.json` files load as data, and each module loads once per run (shared and cycle-safe, like Node). |
 
 ```js
 // #glint
@@ -599,8 +599,9 @@ prefixes. When an action has no icon, its title's initials are used.
 
 - **Install a snippet**: select its text in any app and click **Install Extension**. It's saved as
   `~/Library/Application Support/Glint/Extensions/<identifier>.glintext/Snippet.txt`.
-- **Install a bundle**: open a `.glintext` or `.popclipext` folder with Glint (double-click or drop it on
-  the app). It's copied into the same Extensions folder.
+- **Install a bundle**: open a `.glintext` or `.popclipext` folder, or a zipped `.glintextz` / `.popclipextz`
+  / `.zip`, with Glint (double-click or drop it on the app), or use **Install from File…** in Settings →
+  Actions. It's copied into the same Extensions folder; a zip holding several extensions installs each.
 - **Develop in place**: edit files in `~/Library/Application Support/Glint/Extensions` and reload
   extensions with **Reload Extensions** in Settings → Actions.
 - **Identifiers**: give every extension an `identifier`. Without one, a snippet gets `snippet.<name-slug>`,

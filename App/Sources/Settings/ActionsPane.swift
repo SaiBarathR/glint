@@ -191,18 +191,23 @@ struct ActionsPane: View {
         var failures: [String] = []
         var lastInstalled: String?
         for original in urls {
-            var url = original
-            let ext = url.pathExtension.lowercased()
-            let zipped = ["glintextz", "popclipextz", "zip"].contains(ext)
-            guard ExtensionLoader.bundleExtensions.contains(ext) || zipped else {
-                failures.append("“\(url.lastPathComponent)” isn't a Glint or PopClip extension.")
+            let zipped = AppDelegate.isZippedExtension(original)
+            guard ExtensionLoader.bundleExtensions.contains(original.pathExtension.lowercased()) || zipped else {
+                failures.append("“\(original.lastPathComponent)” isn't a Glint or PopClip extension.")
                 continue
             }
             do {
-                if zipped { url = try AppDelegate.unzipExtension(url) }
-                lastInstalled = try registry.install(bundleAt: url).identifier
+                var bundles = [original]
+                var unzipped: AppDelegate.Unzipped?
+                if zipped {
+                    unzipped = try AppDelegate.unzipExtensions(original)
+                    bundles = unzipped!.bundles
+                }
+                defer { unzipped?.cleanUp() }
+                for url in bundles { lastInstalled = try registry.install(bundleAt: url).identifier }
             } catch {
-                failures.append("“\(url.lastPathComponent)”: \(error.localizedDescription)")
+                // Name the file the user picked, not a temporary folder.
+                failures.append("“\(original.lastPathComponent)”: \(error.localizedDescription)")
             }
         }
         if let lastInstalled { nav.selectedEntryKey = lastInstalled }
