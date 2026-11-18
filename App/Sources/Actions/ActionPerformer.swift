@@ -17,8 +17,11 @@ final class ActionPerformer: ActionHost {
         // If an app hasn't answered Glint's ⌘C yet, let that settle first: its late answer must not land in the
         // middle of this action's clipboard writes or keystrokes.
         if Clipboard.copyOutstanding, !waitedForClipboard {
+            let clickedSession = session
             Task { @MainActor in
                 await Clipboard.waitForOutstandingCopy()
+                // A newer selection was made while waiting: this click belonged to a bar that's gone.
+                guard self.session == clickedSession else { return }
                 self.perform(action, flags: flags, waitedForClipboard: true)
             }
             return
