@@ -132,6 +132,8 @@ struct BarAction: Identifiable {
     let icon: String?
     let iconBaseURL: URL?
     let kind: Kind
+    /// Always show the title as text (e.g. a calculation result).
+    var textOnly: Bool = false
 }
 
 /// The ordered set of built-ins and extensions, with enable state and install/uninstall.
