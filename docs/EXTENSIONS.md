@@ -602,12 +602,16 @@ prefixes. When an action has no icon, its title's initials are used.
 - **Install a bundle**: open a `.glintext` / `.popclipext` folder or a zipped `.glintextz` / `.popclipextz`
   with Glint (double-click or drop it on the app), or use **Install from File…** in Settings → Actions, which
   also accepts a plain `.zip`. It's copied into the same Extensions folder; a zip holding several extensions
-  installs each. A flat zip (config at its root) is named after the extension, so re-downloads update it.
+  installs each. A flat zip (config at its root) or a zip holding one plain folder (such as a GitHub archive
+  `repo-1.3.0/`) is installed under the extension's name, so new versions update it; a `.glintext` /
+  `.popclipext` package inside a zip keeps its own name.
 - **Develop in place**: edit files in `~/Library/Application Support/Glint/Extensions` and reload
   extensions with **Reload Extensions** in Settings → Actions.
 - **Identifiers**: give every extension an `identifier`. Without one, a snippet gets `snippet.<name-slug>`,
   a bundle `bundle.<folder-name>`, and a bundled file `builtin.<file-name>`. A user extension with the same
-  identifier as a bundled one replaces it.
+  identifier as a bundled one replaces it. Installing never replaces a *different* extension that uses the same
+  folder name: the new one goes to `<name>-2`, and an identifier-less extension placed there keeps its
+  identity through a hidden `.glint-identity` file (honoured only in its own `<name>` / `<name>-N` folder).
 - **Console**: script stderr, `console.log` output and failure messages appear in the extension log window.
 - **Errors**: extensions that fail to load are listed in Settings → Actions with the reason (missing `name`, no
   action, invalid YAML…).

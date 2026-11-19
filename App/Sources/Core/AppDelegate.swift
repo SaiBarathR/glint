@@ -158,17 +158,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
         }
         // A flat zip's folder (and so its derived id) comes from the extension itself, not the download's file
         // name, so "Foo (1).zip" updates the same extension as "Foo.zip".
-        // A single extension (flat, or in one wrapper folder like "repo-1.3.0/") is named after itself, not the
-        // archive, so new versions update the installed copy.
-        if found.count == 1, let only = found.first, let m = try? ExtensionLoader.load(folder: only, evaluateModules: false) {
-            let root = only
+        // Read-only archives must still be removable (and their installs updatable).
+        ActionRegistry.makeOwnerWritable(temp)
+        // A flat zip or a plain wrapper folder ("repo-1.3.0/") is named after the extension, not the archive, so new
+        // versions update the installed copy. Real packages (.glintext / .popclipext) keep their own name.
+        if found.count == 1, let only = found.first,
+           only == root || !ExtensionLoader.bundleExtensions.contains(only.pathExtension.lowercased()),
+           let m = try? ExtensionLoader.load(folder: only, evaluateModules: false) {
             let derived = m.identifier.hasPrefix("bundle.") || m.identifier.hasPrefix("snippet.")
-            let raw = derived ? m.name : m.identifier
-            let slug = raw.lowercased().map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? $0 : "-" }
-            var name = String(slug).split(separator: "-").joined(separator: "-")
-            while name.hasPrefix(".") { name.removeFirst() } // a hidden folder would never load
-            let target = temp.appendingPathComponent((name.isEmpty ? "extension" : name) + ".glintext", isDirectory: true)
-            if target != root, (try? fm.moveItem(at: root, to: target)) != nil { found = [target] }
+            let renamed = temp.appendingPathComponent("renamed", isDirectory: true) // fresh parent: never the source itself
+            let target = renamed.appendingPathComponent(ExtensionLoader.folderSlug(derived ? m.name : m.identifier) + ".glintext",
+                                                        isDirectory: true)
+            if (try? fm.createDirectory(at: renamed, withIntermediateDirectories: true)) != nil,
+               (try? fm.moveItem(at: only, to: target)) != nil {
+                found = [target]
+            }
         }
         return Unzipped(bundles: found, tempDir: temp)
     }

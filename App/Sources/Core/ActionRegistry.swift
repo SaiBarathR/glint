@@ -250,25 +250,39 @@ final class ActionRegistry: ObservableObject {
         // Validate before touching anything; the user has agreed, so the module's real identifier is used.
         let incoming = try ExtensionLoader.load(folder: url)
         let fm = FileManager.default
+        // Bundles coming out of a zip are named after the extension (the archive's name often carries a version).
+        // (A folder the unzip step renamed sits in ".../renamed/"; real packages from a zip keep their name.)
+        let fromZip = url.path.contains("/glint-unzip-")
+        let renamedByUnzip = fromZip && (url.deletingLastPathComponent().lastPathComponent == "renamed"
+            || !ExtensionLoader.bundleExtensions.contains(url.pathExtension.lowercased()))
+        let sourceName = url.deletingPathExtension().lastPathComponent
+        let derived = incoming.identifier == ExtensionLoader.derivedIdentity(of: url)
+        // The evaluated module's name/identifier (static naming couldn't see what Config.js exports).
+        let baseName = renamedByUnzip ? ExtensionLoader.folderSlug(derived ? incoming.name : incoming.identifier) : sourceName
+        // The identity it will have once installed: an identifier-less extension is "bundle.<folder>".
+        let identity = derived ? "bundle." + baseName.lowercased() : incoming.identifier
         // Never replace a different extension that happens to use the same folder name.
-        let dest = ExtensionLoader.availableFolder(named: url.deletingPathExtension().lastPathComponent,
-                                                   forIdentifier: incoming.identifier, in: Self.userExtensionsDirectory,
-                                                   pathExtension: url.pathExtension.isEmpty ? "glintext" : url.pathExtension)
+        let dest = ExtensionLoader.availableFolder(named: baseName, forIdentifier: identity, in: Self.userExtensionsDirectory,
+                                                   pathExtension: ExtensionLoader.bundleExtensions.contains(url.pathExtension.lowercased())
+                                                       ? url.pathExtension : "glintext")
         if dest.standardizedFileURL.resolvingSymlinksInPath() != url.standardizedFileURL.resolvingSymlinksInPath() {
             // Copy beside the destination first, then swap, so a failed copy never loses the installed version.
             let staging = Self.userExtensionsDirectory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
             defer { try? fm.removeItem(at: staging) } // gone after a successful swap; cleans up after a failure
             try fm.copyItem(at: url, to: staging)
-            // An extension without an identifier keeps its identity even in a "<name>-2" folder.
-            if incoming.identifier == "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
-                || incoming.identifier == ExtensionLoader.derivedIdentity(of: url) {
-                try? incoming.identifier.write(to: staging.appendingPathComponent(ExtensionLoader.identityMarker),
-                                               atomically: true, encoding: .utf8)
+            Self.makeOwnerWritable(staging) // read-only sources must stay updatable and removable
+            // Pushed to "<name>-N": record the identity so updates find it (only honoured in <name>/<name>-N folders).
+            let marker = staging.appendingPathComponent(ExtensionLoader.identityMarker)
+            if derived, dest.deletingPathExtension().lastPathComponent.lowercased() != baseName.lowercased() {
+                try? identity.write(to: marker, atomically: true, encoding: .utf8)
+            } else {
+                try? fm.removeItem(at: marker)
             }
             if (try? fm.destinationOfSymbolicLink(atPath: dest.path)) != nil {
                 try fm.removeItem(at: dest) // a symlinked copy (developer working copy): replace the link itself
                 try fm.moveItem(at: staging, to: dest)
             } else if fm.fileExists(atPath: dest.path) {
+                Self.makeOwnerWritable(dest)
                 _ = try fm.replaceItemAt(dest, withItemAt: staging)
             } else {
                 try fm.moveItem(at: staging, to: dest)
@@ -277,6 +291,18 @@ final class ActionRegistry: ObservableObject {
         let installed = try ExtensionLoader.load(folder: dest)
         finishInstall(installed)
         return installed
+    }
+
+    /// Adds owner write permission throughout a folder (copies keep the source's modes).
+    static func makeOwnerWritable(_ url: URL) {
+        let fm = FileManager.default
+        var paths = [url.path]
+        if let e = fm.enumerator(atPath: url.path) { while let p = e.nextObject() as? String { paths.append(url.appendingPathComponent(p).path) } }
+        for p in paths {
+            guard let attrs = try? fm.attributesOfItem(atPath: p), attrs[.type] as? FileAttributeType != .typeSymbolicLink,
+                  let mode = (attrs[.posixPermissions] as? NSNumber)?.int16Value else { continue }
+            if mode & 0o200 == 0 { try? fm.setAttributes([.posixPermissions: NSNumber(value: mode | 0o200)], ofItemAtPath: p) }
+        }
     }
 
     /// Moves other user-installed copies of the same extension (e.g. an older "Sort.popclipext" when
@@ -308,7 +334,14 @@ final class ActionRegistry: ObservableObject {
     func uninstall(_ key: String) {
         guard let entry = entries.first(where: { $0.key == key }), entry.isUserInstalled,
               let url = entry.manifest?.sourceURL ?? entry.manifest?.bundleURL else { return }
-        do { try ExtensionLoader.discard(url) } catch { NSLog("Glint: couldn't remove \(url.path): \(error)"); return }
+        Self.makeOwnerWritable(url)
+        do { try ExtensionLoader.discard(url) } catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't uninstall “\(entry.name)”"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+            return
+        }
         prefs.disabledActions.remove(key)
         prefs.knownActions.remove(key)
         prefs.actionHotKeys.removeValue(forKey: key)

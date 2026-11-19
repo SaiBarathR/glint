@@ -15,11 +15,33 @@ public enum ExtensionLoader {
 
     /// Identity of a bundle without an `identifier`: the recorded one, else "bundle.<folder name>".
     public static func derivedIdentity(of url: URL) -> String {
+        let folder = url.deletingPathExtension().lastPathComponent.lowercased()
+        // The record is honoured only in that extension's own "<name>" / "<name>-N" folder, so a duplicated or
+        // renamed copy (e.g. "Shout.glintext" made from "Sort.glintext") becomes its own extension.
         if let recorded = try? String(contentsOf: url.appendingPathComponent(identityMarker), encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines), recorded.hasPrefix("bundle."), recorded.count < 300 {
+            .trimmingCharacters(in: .whitespacesAndNewlines), recorded.hasPrefix("bundle."), recorded.count < 300,
+           isNumberedVariant(folder, of: String(recorded.dropFirst("bundle.".count))) {
             return recorded
         }
-        return "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
+        return "bundle." + folder
+    }
+
+    /// "sort" or "sort-2", "sort-13"… for base "sort" (case-insensitive).
+    public static func isNumberedVariant(_ folder: String, of base: String) -> Bool {
+        let f = folder.lowercased(), b = base.lowercased()
+        if f == b { return true }
+        guard f.hasPrefix(b + "-") else { return false }
+        let n = f.dropFirst(b.count + 1)
+        return !n.isEmpty && n.allSatisfy(\.isNumber)
+    }
+
+    /// A safe folder name from an extension name or identifier ("Sort Lines" → "sort-lines").
+    public static func folderSlug(_ raw: String) -> String {
+        let slug = raw.lowercased().map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? $0 : "-" }
+        var name = String(slug).split(separator: "-").joined(separator: "-")
+        while name.hasPrefix(".") { name.removeFirst() } // a hidden folder would never load
+        while name.hasSuffix(".") { name.removeLast() }
+        return name.isEmpty ? "extension" : name
     }
 
     /// - Parameter evaluateModules: false reads only static information (no JavaScript runs), for showing an
@@ -314,10 +336,7 @@ public enum ExtensionLoader {
         let sameName = items.filter { url in
             guard bundleExtensions.contains(url.pathExtension.lowercased()) || url.pathExtension.lowercased() == pathExtension.lowercased()
             else { return false }
-            let base = url.deletingPathExtension().lastPathComponent.lowercased()
-            if base == lower { return true }
-            guard base.hasPrefix(lower + "-") else { return false }
-            return !base.dropFirst(lower.count + 1).isEmpty && base.dropFirst(lower.count + 1).allSatisfy(\.isNumber)
+            return isNumberedVariant(url.deletingPathExtension().lastPathComponent, of: lower)
         }.sorted { $0.lastPathComponent < $1.lastPathComponent }
         for candidate in sameName where (try? load(folder: candidate))?.identifier == identifier {
             return candidate
