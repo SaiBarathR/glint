@@ -294,14 +294,29 @@ public enum ExtensionLoader {
     public static func availableFolder(named name: String, forIdentifier identifier: String, in directory: URL,
                                        pathExtension: String = "glintext") -> URL {
         let fm = FileManager.default
+        // An extension without an identifier gets "bundle.<folder>"; its own "<name>-N" copy is the same extension.
+        let incomingDerived = identifier == "bundle." + name.lowercased()
         var n = 1
-        while true {
+        while n < 1000 {
             let candidate = directory.appendingPathComponent(n == 1 ? "\(name).\(pathExtension)" : "\(name)-\(n).\(pathExtension)",
                                                              isDirectory: true)
             guard fm.fileExists(atPath: candidate.path) else { return candidate }
-            if (try? load(folder: candidate, evaluateModules: false))?.identifier == identifier { return candidate }
+            // Installed extensions are evaluated on every reload anyway, so read their real (module) identifier.
+            if let existing = try? load(folder: candidate) {
+                if existing.identifier == identifier { return candidate }
+                if incomingDerived, existing.identifier == "bundle." + candidate.deletingPathExtension().lastPathComponent.lowercased() {
+                    return candidate
+                }
+            }
             n += 1
         }
+        return directory.appendingPathComponent("\(name)-\(UUID().uuidString.prefix(8)).\(pathExtension)", isDirectory: true)
+    }
+
+    /// Moves to the Trash, or deletes when the volume has no Trash (some network homes).
+    public static func discard(_ url: URL) throws {
+        let fm = FileManager.default
+        do { try fm.trashItem(at: url, resultingItemURL: nil) } catch { try fm.removeItem(at: url) }
     }
 
     /// Converts a snippet into a bundle folder on disk so it survives restarts.
@@ -314,7 +329,7 @@ public enum ExtensionLoader {
         let folder = availableFolder(named: safe, forIdentifier: manifest.identifier, in: directory)
         let fm = FileManager.default
         // Replacing the same extension: the old copy goes to the Trash, not deleted outright.
-        if fm.fileExists(atPath: folder.path) { try fm.trashItem(at: folder, resultingItemURL: nil) }
+        if fm.fileExists(atPath: folder.path) { try discard(folder) }
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         try text.write(to: folder.appendingPathComponent("Snippet.txt"), atomically: true, encoding: .utf8)
         return folder

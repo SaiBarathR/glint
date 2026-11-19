@@ -634,3 +634,34 @@ final class ReviewRoundTwentySixTests: XCTestCase {
         XCTAssertEqual(Set(ExtensionLoader.loadAll(in: dir).extensions.map(\.identifier)), ["dev.x.translate", "translate"])
     }
 }
+
+final class ReviewRoundTwentySevenTests: XCTestCase {
+    func testDerivedIdentityReusesItsOwnSuffixedFolder() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        func bundle(_ folder: String, _ yaml: String) throws {
+            let f = dir.appendingPathComponent(folder)
+            try fm.createDirectory(at: f, withIntermediateDirectories: true)
+            try yaml.write(to: f.appendingPathComponent("Config.yaml"), atomically: true, encoding: .utf8)
+        }
+        try bundle("Sort.popclipext", "name: Theirs\nidentifier: com.other.sort\nurl: https://x/***")
+        try bundle("Sort-2.popclipext", "name: Mine\nurl: https://y/***") // identifier-less, previously pushed aside
+        let dest = ExtensionLoader.availableFolder(named: "Sort", forIdentifier: "bundle.sort", in: dir, pathExtension: "popclipext")
+        XCTAssertEqual(dest.lastPathComponent, "Sort-2.popclipext")
+    }
+
+    func testModuleIdentifierIsCompared() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let f = dir.appendingPathComponent("Tool.glintext")
+        try fm.createDirectory(at: f, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        try "module.exports = { name: 'A', identifier: 'com.a.tool', actions: [{ title: 'A', code: function() {} }] };"
+            .write(to: f.appendingPathComponent("Config.js"), atomically: true, encoding: .utf8)
+        let dest = ExtensionLoader.availableFolder(named: "Tool", forIdentifier: "com.b.tool", in: dir)
+        XCTAssertEqual(dest.lastPathComponent, "Tool-2.glintext")
+        XCTAssertEqual(ExtensionLoader.availableFolder(named: "Tool", forIdentifier: "com.a.tool", in: dir).lastPathComponent, "Tool.glintext")
+    }
+}

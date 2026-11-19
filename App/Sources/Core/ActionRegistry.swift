@@ -246,9 +246,9 @@ final class ActionRegistry: ObservableObject {
     /// Copies an extension package (.glintext / .popclipext folder) into the user directory.
     @discardableResult
     func install(bundleAt url: URL) throws -> ExtensionManifest {
-        _ = try ExtensionLoader.load(folder: url) // validate before touching anything
+        // Validate before touching anything; the user has agreed, so the module's real identifier is used.
+        let incoming = try ExtensionLoader.load(folder: url)
         let fm = FileManager.default
-        let incoming = try ExtensionLoader.load(folder: url, evaluateModules: false)
         // Never replace a different extension that happens to use the same folder name.
         let dest = ExtensionLoader.availableFolder(named: url.deletingPathExtension().lastPathComponent,
                                                    forIdentifier: incoming.identifier, in: Self.userExtensionsDirectory,
@@ -281,7 +281,7 @@ final class ActionRegistry: ObservableObject {
         for other in ExtensionLoader.loadAll(in: Self.userExtensionsDirectory).extensions
         where other.identifier == m.identifier {
             guard let url = other.sourceURL ?? other.bundleURL, let id = fileID(url), !id.isEqual(keep) else { continue }
-            try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            try? ExtensionLoader.discard(url)
         }
     }
 
@@ -295,7 +295,7 @@ final class ActionRegistry: ObservableObject {
     func uninstall(_ key: String) {
         guard let entry = entries.first(where: { $0.key == key }), entry.isUserInstalled,
               let url = entry.manifest?.sourceURL ?? entry.manifest?.bundleURL else { return }
-        try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        do { try ExtensionLoader.discard(url) } catch { NSLog("Glint: couldn't remove \(url.path): \(error)"); return }
         prefs.disabledActions.remove(key)
         prefs.knownActions.remove(key)
         prefs.actionHotKeys.removeValue(forKey: key)
