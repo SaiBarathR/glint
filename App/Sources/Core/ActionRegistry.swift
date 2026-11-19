@@ -272,7 +272,8 @@ final class ActionRegistry: ObservableObject {
         let dest = ExtensionLoader.availableFolder(named: baseName, forIdentifier: identity, in: Self.userExtensionsDirectory,
                                                    pathExtension: ExtensionLoader.bundleExtensions.contains(url.pathExtension.lowercased())
                                                        ? url.pathExtension : "glintext")
-        if dest.standardizedFileURL.resolvingSymlinksInPath() != url.standardizedFileURL.resolvingSymlinksInPath() {
+        // Compare paths (URLs differ by a trailing slash) to detect develop-in-place.
+        if dest.standardizedFileURL.resolvingSymlinksInPath().path != url.standardizedFileURL.resolvingSymlinksInPath().path {
             // Copy beside the destination first, then swap, so a failed copy never loses the installed version.
             let staging = Self.userExtensionsDirectory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
             defer { try? fm.removeItem(at: staging) } // gone after a successful swap; cleans up after a failure

@@ -703,3 +703,14 @@ final class ReviewRoundThirtyTests: XCTestCase {
         XCTAssertEqual(KeyCombo(string: "command f20")?.keyCode, 90)
     }
 }
+
+final class ReviewRoundThirtyOneTests: XCTestCase {
+    func testRelativeNoiseIsZero() {
+        for e in ["4.35*100-435", "1.15*100-115", "100.1+200.2-300.3", "1234.56-1234.5-0.06", "0.3-0.2-0.1"] {
+            XCTAssertEqual(ContentDetector.detect(in: e).mathResult, "0", e)
+        }
+        XCTAssertEqual(ContentDetector.detect(in: "2^-40").mathResult, "9.09494701772928e-13")
+        XCTAssertEqual(ContentDetector.detect(in: "0.00001*0.000001").mathResult, "1e-11")
+        XCTAssertEqual(ContentDetector.detect(in: "10/4").mathResult, "2.5")
+    }
+}

@@ -70,8 +70,8 @@ public enum ContentDetector {
         }
 
         // Phone numbers like 555-1234 aren't subtraction (but 5000-2500 is).
-        if trimmed.count <= 200, !looksLikePhoneNumber(trimmed), Calculator.looksLikeExpression(trimmed), let value = try? Calculator.evaluate(trimmed) {
-            result.mathResult = Calculator.format(value)
+        if trimmed.count <= 200, !looksLikePhoneNumber(trimmed), Calculator.looksLikeExpression(trimmed), let r = try? Calculator.evaluateWithScale(trimmed) {
+            result.mathResult = Calculator.format(r.value, scale: r.scale)
         }
         return result
     }

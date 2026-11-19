@@ -28,7 +28,11 @@ public enum Calculator {
         return words.allSatisfy { known.contains($0.lowercased()) }
     }
 
-    public static func evaluate(_ input: String) throws -> Double {
+    public static func evaluate(_ input: String) throws -> Double { try evaluateWithScale(input).value }
+
+    /// The result plus the largest magnitude seen in the calculation (operands and intermediates), so callers
+    /// can tell rounding noise (4.35*100-435 ≈ 6e-14) from a genuinely tiny result (2^-40 ≈ 9e-13).
+    public static func evaluateWithScale(_ input: String) throws -> (value: Double, scale: Double) {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasSuffix("=") { text.removeLast() }
         text = text.replacingOccurrences(of: "×", with: "*").replacingOccurrences(of: "÷", with: "/")
@@ -39,10 +43,12 @@ public enum Calculator {
         parser.skipSpaces()
         guard parser.atEnd else { throw CalcError.syntax }
         guard value.isFinite else { throw CalcError.divisionByZero }
-        return value
+        return (value, max(parser.maxMagnitude, abs(value)))
     }
 
-    public static func format(_ value: Double) -> String {
+    public static func format(_ value: Double, scale: Double = 0) -> String {
+        // Rounding noise relative to the numbers involved (~45 ulps of the largest) is 0.
+        if scale > 0, abs(value) < scale * 1e-14 { return "0" }
         guard value.isFinite else { return "\(value)" }
         // Integers are exact up to 2^53: print them in full.
         if value == value.rounded(), abs(value) <= 9_007_199_254_740_992 {
@@ -68,6 +74,12 @@ public enum Calculator {
     private struct Parser {
         let chars: [Character]
         var i = 0
+        /// Largest |value| of any number or intermediate result.
+        var maxMagnitude: Double = 0
+        mutating func note(_ v: Double) -> Double {
+            if v.isFinite { maxMagnitude = max(maxMagnitude, abs(v)) }
+            return v
+        }
         init(_ chars: [Character]) { self.chars = chars }
         var atEnd: Bool { i >= chars.count }
         mutating func skipSpaces() { while i < chars.count, chars[i] == " " { i += 1 } }
@@ -78,7 +90,7 @@ public enum Calculator {
             while let c = peek(), c == "+" || c == "-" {
                 i += 1
                 let rhs = try parseTerm()
-                value = c == "+" ? value + rhs : value - rhs
+                value = note(c == "+" ? value + rhs : value - rhs)
             }
             return value
         }
@@ -89,10 +101,10 @@ public enum Calculator {
                 i += 1
                 let rhs = try parseFactor()
                 switch c {
-                case "*", "x": value *= rhs
+                case "*", "x": value = note(value * rhs)
                 case "/":
                     guard rhs != 0 else { throw CalcError.divisionByZero }
-                    value /= rhs
+                    value = note(value / rhs)
                 default:
                     guard rhs != 0 else { throw CalcError.divisionByZero }
                     value = value.truncatingRemainder(dividingBy: rhs)
@@ -112,7 +124,7 @@ public enum Calculator {
             if let c = peek(), c == "^" {
                 i += 1
                 let exp = try parseFactor() // right associative, may carry its own sign: 2^-1
-                return pow(base, exp)
+                return note(pow(base, exp))
             }
             return base
         }
@@ -137,7 +149,7 @@ public enum Calculator {
                     while i < chars.count, chars[i].isNumber { i += 1 }
                 }
                 guard let v = Double(String(chars[start..<i])) else { throw CalcError.syntax }
-                return v
+                return note(v)
             }
             if c.isLetter {
                 let start = i
