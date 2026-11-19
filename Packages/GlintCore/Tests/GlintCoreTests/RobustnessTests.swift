@@ -648,6 +648,9 @@ final class ReviewRoundTwentySevenTests: XCTestCase {
         }
         try bundle("Sort.popclipext", "name: Theirs\nidentifier: com.other.sort\nurl: https://x/***")
         try bundle("Sort-2.popclipext", "name: Mine\nurl: https://y/***") // identifier-less, previously pushed aside
+        // Installs record the identity of an identifier-less extension placed in a "-N" folder.
+        try "bundle.sort".write(to: dir.appendingPathComponent("Sort-2.popclipext/\(ExtensionLoader.identityMarker)"),
+                                atomically: true, encoding: .utf8)
         let dest = ExtensionLoader.availableFolder(named: "Sort", forIdentifier: "bundle.sort", in: dir, pathExtension: "popclipext")
         XCTAssertEqual(dest.lastPathComponent, "Sort-2.popclipext")
     }
@@ -663,5 +666,30 @@ final class ReviewRoundTwentySevenTests: XCTestCase {
         let dest = ExtensionLoader.availableFolder(named: "Tool", forIdentifier: "com.b.tool", in: dir)
         XCTAssertEqual(dest.lastPathComponent, "Tool-2.glintext")
         XCTAssertEqual(ExtensionLoader.availableFolder(named: "Tool", forIdentifier: "com.a.tool", in: dir).lastPathComponent, "Tool.glintext")
+    }
+}
+
+final class ReviewRoundTwentyEightTests: XCTestCase {
+    func testIdentityMarkerAndOwnCopyLookup() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        func bundle(_ folder: String, _ yaml: String, marker: String? = nil) throws {
+            let f = dir.appendingPathComponent(folder)
+            try fm.createDirectory(at: f, withIntermediateDirectories: true)
+            try yaml.write(to: f.appendingPathComponent("Config.yaml"), atomically: true, encoding: .utf8)
+            if let marker { try marker.write(to: f.appendingPathComponent(ExtensionLoader.identityMarker), atomically: true, encoding: .utf8) }
+        }
+        // My identifier-less "Sort" lives in Sort-2 (recorded identity); an unrelated "Sort Two" sits in Sort-3.
+        try bundle("Sort-2.popclipext", "name: Mine\nurl: https://y/***", marker: "bundle.sort")
+        try bundle("Sort-3.popclipext", "name: Sort Two\nurl: https://z/***")
+        XCTAssertEqual(try ExtensionLoader.loadBundle(at: dir.appendingPathComponent("Sort-2.popclipext")).identifier, "bundle.sort")
+        // Collider gone: the update still finds its own copy instead of taking the free "Sort" slot.
+        XCTAssertEqual(ExtensionLoader.availableFolder(named: "Sort", forIdentifier: "bundle.sort", in: dir, pathExtension: "popclipext").lastPathComponent,
+                       "Sort-2.popclipext")
+        // A new extension never lands on an unrelated -N folder.
+        XCTAssertEqual(ExtensionLoader.availableFolder(named: "Sort", forIdentifier: "com.new.sort", in: dir, pathExtension: "popclipext").lastPathComponent,
+                       "Sort.popclipext")
     }
 }

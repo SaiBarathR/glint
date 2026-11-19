@@ -165,6 +165,7 @@ final class ActionRegistry: ObservableObject {
     private init() { reload() }
 
     func reload() {
+        IconRenderer.clearCache() // icon files may have changed (updated or edited extensions)
         var list: [RegistryEntry] = BuiltinID.allCases.map { RegistryEntry(key: $0.key, source: .builtin($0)) }
         var errors: [(String, String)] = []
         if let dir = Self.bundledExtensionsDirectory {
@@ -258,7 +259,16 @@ final class ActionRegistry: ObservableObject {
             let staging = Self.userExtensionsDirectory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
             defer { try? fm.removeItem(at: staging) } // gone after a successful swap; cleans up after a failure
             try fm.copyItem(at: url, to: staging)
-            if fm.fileExists(atPath: dest.path) {
+            // An extension without an identifier keeps its identity even in a "<name>-2" folder.
+            if incoming.identifier == "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
+                || incoming.identifier == ExtensionLoader.derivedIdentity(of: url) {
+                try? incoming.identifier.write(to: staging.appendingPathComponent(ExtensionLoader.identityMarker),
+                                               atomically: true, encoding: .utf8)
+            }
+            if (try? fm.destinationOfSymbolicLink(atPath: dest.path)) != nil {
+                try fm.removeItem(at: dest) // a symlinked copy (developer working copy): replace the link itself
+                try fm.moveItem(at: staging, to: dest)
+            } else if fm.fileExists(atPath: dest.path) {
                 _ = try fm.replaceItemAt(dest, withItemAt: staging)
             } else {
                 try fm.moveItem(at: staging, to: dest)
@@ -275,7 +285,10 @@ final class ActionRegistry: ObservableObject {
         // Compare by file identity: the volume is usually case-insensitive, so "sort.popclipext" may be the
         // same folder as "Sort.popclipext".
         func fileID(_ url: URL?) -> NSObject? {
-            (try? url?.resourceValues(forKeys: [.fileResourceIdentifierKey]))?.fileResourceIdentifier as? NSObject
+            // A fresh URL: values cached on an old URL (e.g. before the folder was trashed and recreated) are stale.
+            guard let url else { return nil }
+            return (try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.fileResourceIdentifierKey]))?
+                .fileResourceIdentifier as? NSObject
         }
         guard let keep = fileID(m.sourceURL ?? m.bundleURL) else { return }
         for other in ExtensionLoader.loadAll(in: Self.userExtensionsDirectory).extensions

@@ -9,6 +9,19 @@ public enum ExtensionLoader {
 
     // MARK: Bundles
 
+    /// File inside an installed bundle recording the identity of an extension that has no `identifier`, so it
+    /// stays the same extension when it had to be installed as "<name>-2".
+    public static let identityMarker = ".glint-identity"
+
+    /// Identity of a bundle without an `identifier`: the recorded one, else "bundle.<folder name>".
+    public static func derivedIdentity(of url: URL) -> String {
+        if let recorded = try? String(contentsOf: url.appendingPathComponent(identityMarker), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines), recorded.hasPrefix("bundle."), recorded.count < 300 {
+            return recorded
+        }
+        return "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
+    }
+
     /// - Parameter evaluateModules: false reads only static information (no JavaScript runs), for showing an
     ///   install prompt before the user has agreed to anything; module actions are then left out.
     public static func loadBundle(at url: URL, isBuiltIn: Bool = false, evaluateModules: Bool = true) throws -> ExtensionManifest {
@@ -19,14 +32,14 @@ public enum ExtensionLoader {
             let ext = file.pathExtension.lowercased()
             if (ext == "js" || ext == "ts"), !evaluateModules {
                 let folder = url.deletingPathExtension().lastPathComponent
-                return ExtensionManifest(identifier: "bundle." + folder.lowercased(), name: folder, actions: [],
+                return ExtensionManifest(identifier: derivedIdentity(of: url), name: folder, actions: [],
                                          bundleURL: url, isBuiltIn: isBuiltIn)
             }
             if ext == "js" || ext == "ts" {
                 let src = try String(contentsOf: file, encoding: .utf8)
                 var m = try loadJavaScriptModule(source: src, bundleURL: url, isBuiltIn: isBuiltIn)
                 if m.identifier.hasPrefix("snippet.") {
-                    m.identifier = "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
+                    m.identifier = derivedIdentity(of: url)
                 }
                 m.sourceURL = url
                 return m
@@ -41,7 +54,7 @@ public enum ExtensionLoader {
                 manifest = module
             }
             if manifest.identifier.hasPrefix("snippet.") {
-                manifest.identifier = "bundle." + url.deletingPathExtension().lastPathComponent.lowercased()
+                manifest.identifier = derivedIdentity(of: url)
             }
             manifest.sourceURL = url
             return manifest
@@ -294,21 +307,29 @@ public enum ExtensionLoader {
     public static func availableFolder(named name: String, forIdentifier identifier: String, in directory: URL,
                                        pathExtension: String = "glintext") -> URL {
         let fm = FileManager.default
-        // An extension without an identifier gets "bundle.<folder>"; its own "<name>-N" copy is the same extension.
-        let incomingDerived = identifier == "bundle." + name.lowercased()
-        var n = 1
-        while n < 1000 {
+        // First look for this extension's own copy among "<name>" and "<name>-N" folders (any bundle suffix);
+        // installed extensions are evaluated on every reload anyway, so their real identifiers are read.
+        let items = (try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        let lower = name.lowercased()
+        let sameName = items.filter { url in
+            guard bundleExtensions.contains(url.pathExtension.lowercased()) || url.pathExtension.lowercased() == pathExtension.lowercased()
+            else { return false }
+            let base = url.deletingPathExtension().lastPathComponent.lowercased()
+            if base == lower { return true }
+            guard base.hasPrefix(lower + "-") else { return false }
+            return !base.dropFirst(lower.count + 1).isEmpty && base.dropFirst(lower.count + 1).allSatisfy(\.isNumber)
+        }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        for candidate in sameName where (try? load(folder: candidate))?.identifier == identifier {
+            return candidate
+        }
+        // Otherwise the first free "<name>" / "<name>-N" slot; never an occupied folder of another extension.
+        for n in 1..<1000 {
             let candidate = directory.appendingPathComponent(n == 1 ? "\(name).\(pathExtension)" : "\(name)-\(n).\(pathExtension)",
                                                              isDirectory: true)
-            guard fm.fileExists(atPath: candidate.path) else { return candidate }
-            // Installed extensions are evaluated on every reload anyway, so read their real (module) identifier.
-            if let existing = try? load(folder: candidate) {
-                if existing.identifier == identifier { return candidate }
-                if incomingDerived, existing.identifier == "bundle." + candidate.deletingPathExtension().lastPathComponent.lowercased() {
-                    return candidate
-                }
+            if !fm.fileExists(atPath: candidate.path), (try? candidate.checkResourceIsReachable()) != true,
+               (try? fm.destinationOfSymbolicLink(atPath: candidate.path)) == nil {
+                return candidate
             }
-            n += 1
         }
         return directory.appendingPathComponent("\(name)-\(UUID().uuidString.prefix(8)).\(pathExtension)", isDirectory: true)
     }

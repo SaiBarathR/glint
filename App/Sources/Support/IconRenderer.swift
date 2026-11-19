@@ -11,6 +11,10 @@ enum IconRenderer {
     private static var cache: [String: NSImage] = [:]
     private static let cacheLock = NSLock()
 
+    static func clearCache() {
+        cacheLock.lock(); cache.removeAll(); cacheLock.unlock()
+    }
+
     static func image(for spec: String?, baseURL: URL?, size: CGFloat, fallbackTitle: String? = nil) -> NSImage? {
         // The title only matters when there's no icon spec; keeping it out of the key stops the cache growing
         // with every "Open <host>" / "Email <address>" title.
