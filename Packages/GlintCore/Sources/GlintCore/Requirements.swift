@@ -22,6 +22,10 @@ public struct ActionInput: Equatable {
 }
 
 public enum RequirementEvaluator {
+    static func isNegated(_ requirement: String) -> Bool {
+        requirement.trimmingCharacters(in: .whitespaces).hasPrefix("!")
+    }
+
     /// Returns the input for the action, or nil when the action should not appear.
     public static func evaluate(_ action: ActionSpec, context: SelectionContext,
                                 detected: DetectedContent? = nil) -> ActionInput? {
@@ -74,10 +78,10 @@ public enum RequirementEvaluator {
             }
         }
         // For url requirements, the action works on the detected URL.
-        if action.requirements.contains(where: { normalizeKey($0) == "url" }), let url = content.urls.first, action.regex == nil {
+        if action.requirements.contains(where: { !isNegated($0) && normalizeKey($0) == "url" }), let url = content.urls.first, action.regex == nil {
             input.matchedText = url
         }
-        if action.requirements.contains(where: { normalizeKey($0) == "email" }), let email = content.emails.first, action.regex == nil {
+        if action.requirements.contains(where: { !isNegated($0) && normalizeKey($0) == "email" }), let email = content.emails.first, action.regex == nil {
             input.matchedText = email
         }
         return input

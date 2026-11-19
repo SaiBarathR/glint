@@ -85,9 +85,11 @@ struct AdvancedPane: View {
         UserDefaults.standard.removePersistentDomain(forName: id)
         UserDefaults.standard.synchronize()
         // Settings that live outside UserDefaults: launch at login and secret extension options.
-        try? SMAppService.mainApp.unregister()
+        Preferences.shared.launchAtLogin = false // unregisters via didSet and updates the toggle
+        // The file-based keychain deletes one match unless asked for all.
         SecItemDelete([kSecClass as String: kSecClassGenericPassword,
-                       kSecAttrService as String: "dev.saibarath.glint.options"] as CFDictionary)
+                       kSecAttrService as String: "dev.saibarath.glint.options",
+                       kSecMatchLimit as String: kSecMatchLimitAll] as CFDictionary)
         resetDone = true
     }
 

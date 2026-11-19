@@ -503,3 +503,30 @@ final class ReviewRoundNineteenTests: XCTestCase {
         XCTAssertEqual(out, .result("threw/threw"))
     }
 }
+
+final class ReviewRoundTwentyTwoTests: XCTestCase {
+    func testNegatedURLDoesNotNarrowInput() {
+        let a = ActionSpec(id: "d", title: "D", kind: .native(id: "x"), requirements: ["text", "!url"])
+        let text = "compare https://a.example.com/x and https://b.example.org/y"
+        XCTAssertEqual(RequirementEvaluator.evaluate(a, context: SelectionContext(text: text))?.matchedText, text)
+    }
+
+    func testYAMLAliasBombIsRejectedQuickly() {
+        var yaml = "#glint\nname: Bomb\nurl: https://x/***\na0: &a0 [x,x,x,x,x,x,x,x,x]\n"
+        for i in 1...9 { yaml += "a\(i): &a\(i) [" + Array(repeating: "*a\(i-1)", count: 9).joined(separator: ",") + "]\n" }
+        let start = Date()
+        XCTAssertThrowsError(try ExtensionLoader.parseSnippet(yaml))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2)
+    }
+
+    func testModuleActionDescription() throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        // #glint
+        // name: D
+        // language: javascript
+        // module: true
+        exports.actions = [{ title: 'A', description: 'does A', code: function() {} }];
+        """)
+        XCTAssertEqual(m.actions.first?.description, "does A")
+    }
+}

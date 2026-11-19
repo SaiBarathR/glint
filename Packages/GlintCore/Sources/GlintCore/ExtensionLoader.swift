@@ -59,9 +59,28 @@ public enum ExtensionLoader {
         }
     }
 
+    /// Largest YAML document (in nodes, aliases expanded) accepted. Configs are tiny; this stops "billion laughs"
+    /// alias bombs before they're expanded, since snippets are parsed before the user agrees to install.
+    static let yamlNodeBudget = 50_000
+
     public static func parseYAMLDictionary(_ text: String) throws -> [String: Any] {
         let object: Any?
-        do { object = try Yams.load(yaml: text) } catch { throw ManifestError.invalidYAML("\(error)") }
+        do {
+            if let root = try Yams.compose(yaml: text) {
+                var count = 0
+                func walk(_ node: Node) throws {
+                    count += 1
+                    if count > yamlNodeBudget { throw ManifestError.invalidYAML("The extension config is too large.") }
+                    switch node {
+                    case .mapping(let m): for (k, v) in m { try walk(k); try walk(v) }
+                    case .sequence(let s): for v in s { try walk(v) }
+                    default: break
+                    }
+                }
+                try walk(root)
+            }
+            object = try Yams.load(yaml: text)
+        } catch let e as ManifestError { throw e } catch { throw ManifestError.invalidYAML("\(error)") }
         guard let dict = object as? [String: Any] else { throw ManifestError.notADictionary }
         return dict
     }
@@ -104,7 +123,8 @@ public enum ExtensionLoader {
                                           ?? defaults.excludedApps,
                                       stayVisible: ac.bool("stay visible") ?? defaults.stayVisible ?? false,
                                       restoreClipboard: ac.bool("restore pasteboard") ?? defaults.restoreClipboard ?? false,
-                                      captureHTML: ac.bool("capture html") ?? defaults.captureHTML ?? false))
+                                      captureHTML: ac.bool("capture html") ?? defaults.captureHTML ?? false,
+                                      description: ac.string("description")))
         }
         if let err = info.error, actions.isEmpty { throw ManifestError.unreadable("JavaScript error: \(err)") }
         if actions.isEmpty { throw ManifestError.noActions }

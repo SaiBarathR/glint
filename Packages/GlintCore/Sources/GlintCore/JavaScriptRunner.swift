@@ -128,6 +128,8 @@ public enum JavaScriptRunner {
         };
         inst.get = function(url, cfg) { cfg = cfg || {}; cfg.url = url; cfg.method = 'GET'; return inst.request(cfg); };
         inst.post = function(url, data, cfg) { cfg = cfg || {}; cfg.url = url; cfg.data = data; cfg.method = 'POST'; return inst.request(cfg); };
+        inst.put = function(url, data, cfg) { cfg = cfg || {}; cfg.url = url; cfg.data = data; cfg.method = 'PUT'; return inst.request(cfg); };
+        inst.delete = function(url, cfg) { cfg = cfg || {}; cfg.url = url; cfg.method = 'DELETE'; return inst.request(cfg); };
         return inst;
       }
     };
