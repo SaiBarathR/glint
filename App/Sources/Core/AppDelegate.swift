@@ -158,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
         }
         // A flat zip's folder (and so its derived id) comes from the extension itself, not the download's file
         // name, so "Foo (1).zip" updates the same extension as "Foo.zip".
-        if found == [root], let m = try? ExtensionLoader.load(folder: root) {
+        if found == [root], let m = try? ExtensionLoader.load(folder: root, evaluateModules: false) {
             let derived = m.identifier.hasPrefix("bundle.") || m.identifier.hasPrefix("snippet.")
             let raw = derived ? m.name : m.identifier
             let slug = raw.lowercased().map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? $0 : "-" }

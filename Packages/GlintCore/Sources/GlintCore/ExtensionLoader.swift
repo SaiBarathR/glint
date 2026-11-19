@@ -31,7 +31,7 @@ public enum ExtensionLoader {
                 m.sourceURL = url
                 return m
             }
-            let dict = try readDictionary(file)
+            let dict = try readDictionary(file, trusted: isBuiltIn)
             var manifest = try ManifestParser.parse(dict, bundleURL: url, isBuiltIn: isBuiltIn)
             // `module: file.js` in a static config: the module supplies the actions.
             if evaluateModules, manifest.actions.isEmpty, let source = manifest.moduleSource {
@@ -49,8 +49,12 @@ public enum ExtensionLoader {
         throw ManifestError.unreadable("No Config.yaml, Config.json or Config.plist in \(url.lastPathComponent)")
     }
 
-    public static func readDictionary(_ file: URL) throws -> [String: Any] {
+    /// Config files larger than this are refused (any format).
+    static let configMaxBytes = 256 * 1024
+
+    public static func readDictionary(_ file: URL, trusted: Bool = false) throws -> [String: Any] {
         let data = try Data(contentsOf: file)
+        guard data.count <= configMaxBytes else { throw ManifestError.unreadable("The extension config is too large.") }
         switch file.pathExtension.lowercased() {
         case "json":
             guard let d = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ManifestError.notADictionary }
@@ -62,7 +66,7 @@ public enum ExtensionLoader {
             return d
         default:
             guard let text = String(data: data, encoding: .utf8) else { throw ManifestError.unreadable("not UTF-8") }
-            return try parseYAMLDictionary(text)
+            return try parseYAMLDictionary(text, trusted: trusted)
         }
     }
 
@@ -78,13 +82,33 @@ public enum ExtensionLoader {
     private static let aliasPattern = try! NSRegularExpression(pattern: #"(?:^|[\s\[\{,:?])\*[A-Za-z0-9_\-]+"#,
                                                                options: [.anchorsMatchLines])
 
-    public static func parseYAMLDictionary(_ text: String) throws -> [String: Any] {
+    /// Parses YAML that didn't ship with the app. The app installs a parser that runs in a separate process with
+    /// a deadline, so a pathological document can't hang or crash Glint. Nil means parse in-process.
+    public static var isolatedYAMLParser: ((String) throws -> [String: Any])?
+
+    public static func parseYAMLDictionary(_ text: String, trusted: Bool = false) throws -> [String: Any] {
+        if !trusted, let isolated = isolatedYAMLParser { return try isolated(text) }
+        return try parseYAMLInProcess(text)
+    }
+
+    /// Yams' default constructor turns "1:00:00:…" into a base-60 Int with trapping arithmetic (crash on
+    /// overflow). Such values are kept as strings instead.
+    static let safeConstructor: Constructor = {
+        var scalars = Constructor.defaultScalarMap
+        let int = scalars[.int]
+        scalars[.int] = { s in s.string.contains(":") ? s.string : int?(s) }
+        return Constructor(scalars)
+    }()
+
+    public static func parseYAMLInProcess(_ text: String) throws -> [String: Any] {
+        // libyaml skips a byte-order mark at the start of any line, which could hide aliases from the count.
+        if text.unicodeScalars.dropFirst().contains("\u{FEFF}") { throw ManifestError.invalidYAML("Unexpected byte-order mark.") }
         guard text.utf8.count <= yamlMaxBytes else { throw ManifestError.invalidYAML("The extension config is too large.") }
         let aliases = aliasPattern.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
         guard aliases <= yamlMaxAliases else { throw ManifestError.invalidYAML("The extension config uses too many aliases.") }
         let object: Any?
         do {
-            if let root = try Yams.compose(yaml: text) {
+            if let root = try Yams.compose(yaml: text, .default, safeConstructor) { // every node constructs safely
                 var count = 0
                 func walk(_ node: Node) throws {
                     count += 1
@@ -101,8 +125,10 @@ public enum ExtensionLoader {
                     }
                 }
                 try walk(root)
+                object = root.any
+            } else {
+                object = nil
             }
-            object = try Yams.load(yaml: text)
         } catch let e as ManifestError { throw e } catch {
             // Keep messages short: some Yams errors embed the source line once per problem.
             if let y = error as? YamlError, case .duplicatedKeysInMapping = y {
@@ -188,7 +214,7 @@ public enum ExtensionLoader {
     ///  1. YAML snippets: `#glint` header line followed by YAML config.
     ///  2. Inverted snippets: code whose header comment lines hold the YAML config, e.g.
     ///     `// #glint` / `// name: Upper` / `// language: javascript` then the script body.
-    public static func parseSnippet(_ text: String, evaluateModules: Bool = true) throws -> ExtensionManifest {
+    public static func parseSnippet(_ text: String, evaluateModules: Bool = true, trusted: Bool = false) throws -> ExtensionManifest {
         var lines = text.components(separatedBy: .newlines)
         while let f = lines.first, f.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeFirst() }
         guard let header = lines.first else { throw ManifestError.missingName }
@@ -215,7 +241,7 @@ public enum ExtensionLoader {
                 index += 1
             }
             let code = lines[index...].joined(separator: "\n").trimmingCharacters(in: .newlines)
-            let config = try parseYAMLDictionary(configLines.joined(separator: "\n"))
+            let config = try parseYAMLDictionary(configLines.joined(separator: "\n"), trusted: trusted)
             let c = ConfigDict(config)
             if let lang = c.string("language"), ["javascript", "js"].contains(normalizeKey(lang)),
                c.bool("module") == true || code.contains("exports.actions") || code.contains("exports.action ")
@@ -244,7 +270,7 @@ public enum ExtensionLoader {
 
         var yaml = lines.dropFirst().joined(separator: "\n")
         if headerRest.contains(":") { yaml = headerRest + "\n" + yaml }
-        let dict = try parseYAMLDictionary(yaml)
+        let dict = try parseYAMLDictionary(yaml, trusted: trusted)
         return try ManifestParser.parse(dict, snippetSource: text)
     }
 
@@ -268,7 +294,7 @@ public enum ExtensionLoader {
         let snippet = folder.appendingPathComponent("Snippet.txt")
         if FileManager.default.fileExists(atPath: snippet.path) {
             let text = try String(contentsOf: snippet, encoding: .utf8)
-            var m = try parseSnippet(text, evaluateModules: evaluateModules)
+            var m = try parseSnippet(text, evaluateModules: evaluateModules, trusted: isBuiltIn)
             m.bundleURL = folder
             m.sourceURL = folder
             m.isBuiltIn = isBuiltIn
@@ -290,8 +316,8 @@ public enum ExtensionLoader {
             } else if ["yaml", "yml", "txt"].contains(item.pathExtension.lowercased()) {
                 do {
                     let text = try String(contentsOf: item, encoding: .utf8)
-                    var m = isSnippet(text) ? try parseSnippet(text)
-                                            : try ManifestParser.parse(parseYAMLDictionary(text), isBuiltIn: isBuiltIn)
+                    var m = isSnippet(text) ? try parseSnippet(text, trusted: isBuiltIn)
+                                            : try ManifestParser.parse(parseYAMLDictionary(text, trusted: isBuiltIn), isBuiltIn: isBuiltIn)
                     m.isBuiltIn = isBuiltIn
                     m.sourceURL = item
                     if m.identifier.hasPrefix("snippet."), isBuiltIn {

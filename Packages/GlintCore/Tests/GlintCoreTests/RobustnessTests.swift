@@ -571,3 +571,21 @@ final class ReviewRoundTwentyThreeTests: XCTestCase {
         XCTAssertEqual(m.name, "Heavy")
     }
 }
+
+final class ReviewRoundTwentyFourTests: XCTestCase {
+    func testBase60ValuesDoNotCrash() throws {
+        let d = try ExtensionLoader.parseYAMLDictionary("name: X\nd: 1:00:00:00:00:00:00:00:00:00:00\ne: !!int 1:1:1:1:1:1:1:1:1:1:1:1:1:1\nn: 42")
+        XCTAssertEqual(d["d"] as? String, "1:00:00:00:00:00:00:00:00:00:00")
+        XCTAssertEqual(d["n"] as? Int, 42)
+    }
+
+    func testByteOrderMarkInsideIsRejected() {
+        XCTAssertThrowsError(try ExtensionLoader.parseYAMLDictionary("name: X\na: &a [1]\nb:\n\u{FEFF}*a"))
+        XCTAssertNoThrow(try ExtensionLoader.parseYAMLDictionary("\u{FEFF}name: X"))
+    }
+
+    func testTooManyActions() {
+        let actions = (0..<300).map { "  - {title: A\($0), url: 'https://x/***'}" }.joined(separator: "\n")
+        XCTAssertThrowsError(try ExtensionLoader.parseSnippet("#glint\nname: Many\nactions:\n" + actions))
+    }
+}

@@ -248,6 +248,7 @@ public enum ManifestParser {
         let defaults = ActionDefaults(config: c)
         var actions: [ActionSpec] = []
         if let list = c.dicts("actions") {
+            guard list.count <= 200 else { throw ManifestError.unreadable("The extension defines too many actions (\(list.count)).") }
             for (index, item) in list.enumerated() {
                 if let a = try parseAction(ConfigDict(item), defaults: defaults, extensionName: name,
                                            extensionIcon: icon, index: index, bundleURL: bundleURL, inlineCode: nil) {
