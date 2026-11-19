@@ -589,3 +589,14 @@ final class ReviewRoundTwentyFourTests: XCTestCase {
         XCTAssertThrowsError(try ExtensionLoader.parseSnippet("#glint\nname: Many\nactions:\n" + actions))
     }
 }
+
+final class ReviewRoundTwentyFiveTests: XCTestCase {
+    func testScalarsKeepAuthorText() throws {
+        let d = try ExtensionLoader.parseYAMLDictionary("name: X\nt: 2024-06-01\ninf: .inf\nbig: 1e999\nb: !!binary aGVsbG8=\nf: 1.5")
+        XCTAssertEqual(d["t"] as? String, "2024-06-01")
+        XCTAssertEqual(d["inf"] as? String, ".inf")
+        XCTAssertEqual(d["big"] as? String, "1e999")
+        XCTAssertEqual(d["b"] as? String, "aGVsbG8=")
+        XCTAssertEqual(d["f"] as? Double, 1.5)
+    }
+}

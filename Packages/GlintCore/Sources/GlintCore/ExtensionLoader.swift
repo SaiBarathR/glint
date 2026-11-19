@@ -95,8 +95,15 @@ public enum ExtensionLoader {
     /// overflow). Such values are kept as strings instead.
     static let safeConstructor: Constructor = {
         var scalars = Constructor.defaultScalarMap
-        let int = scalars[.int]
+        let int = scalars[.int], float = scalars[.float]
         scalars[.int] = { s in s.string.contains(":") ? s.string : int?(s) }
+        // Keep the author's text for values that don't survive as config strings: dates, binary, inf/NaN.
+        scalars[.float] = { s in
+            if let d = float?(s) as? Double, !d.isFinite { return s.string }
+            return float?(s)
+        }
+        scalars[.timestamp] = { s in s.string }
+        scalars[.binary] = { s in s.string }
         return Constructor(scalars)
     }()
 

@@ -18,7 +18,11 @@ struct SnippetInstallSheet: View {
         case invalid(String)
     }
 
-    private var validation: Validation {
+    /// Recomputed when the text changes (not on every render: parsing may spawn the YAML helper).
+    @State private var validation: Validation = .empty
+    @State private var validatedText: String?
+
+    private static func validate(_ text: String) -> Validation {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .empty }
         do {
@@ -28,7 +32,19 @@ struct SnippetInstallSheet: View {
         }
     }
 
+    private func revalidate() {
+        guard validatedText != text else { return }
+        validatedText = text
+        validation = Self.validate(text)
+    }
+
     var body: some View {
+        content
+            .onAppear(perform: revalidate)
+            .onChange(of: text) { _, _ in revalidate() }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Paste Extension Snippet")
