@@ -600,3 +600,37 @@ final class ReviewRoundTwentyFiveTests: XCTestCase {
         XCTAssertEqual(d["f"] as? Double, 1.5)
     }
 }
+
+final class ReviewRoundTwentySixTests: XCTestCase {
+    func testYesNoOnOffStayWords() throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        #glint
+        name: Modes
+        url: https://x/***
+        options:
+          - identifier: mode
+            type: multiple
+            values: [on, off, auto]
+            value labels: [On, Off, Automatic]
+          - identifier: loud
+            type: boolean
+            default value: yes
+        """)
+        XCTAssertEqual(m.options[0].values, ["on", "off", "auto"])
+        XCTAssertEqual(m.options[0].valueLabels, ["On", "Off", "Automatic"])
+        XCTAssertEqual(m.options[1].defaultValue, "1")
+    }
+
+    func testSnippetNeverReplacesADifferentExtension() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let other = dir.appendingPathComponent("translate.glintext")
+        try fm.createDirectory(at: other, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        try "name: Other\nidentifier: dev.x.translate\nurl: https://x/***".write(to: other.appendingPathComponent("Config.yaml"), atomically: true, encoding: .utf8)
+        let folder = try ExtensionLoader.installSnippet("#glint\nname: Mine\nidentifier: translate\nurl: https://y/***", into: dir)
+        XCTAssertEqual(folder.lastPathComponent, "translate-2.glintext")
+        XCTAssertTrue(fm.fileExists(atPath: other.appendingPathComponent("Config.yaml").path))
+        XCTAssertEqual(Set(ExtensionLoader.loadAll(in: dir).extensions.map(\.identifier)), ["dev.x.translate", "translate"])
+    }
+}

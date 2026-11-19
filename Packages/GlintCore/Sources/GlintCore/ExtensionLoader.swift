@@ -96,6 +96,14 @@ public enum ExtensionLoader {
     static let safeConstructor: Constructor = {
         var scalars = Constructor.defaultScalarMap
         let int = scalars[.int], float = scalars[.float]
+        // YAML 1.1 reads yes/no/on/off as booleans; as config text they must stay words ("on", "Off").
+        scalars[.bool] = { s in
+            switch s.string.lowercased() {
+            case "true": return true
+            case "false": return false
+            default: return s.string
+            }
+        }
         scalars[.int] = { s in s.string.contains(":") ? s.string : int?(s) }
         // Keep the author's text for values that don't survive as config strings: dates, binary, inf/NaN.
         scalars[.float] = { s in
@@ -281,6 +289,21 @@ public enum ExtensionLoader {
         return try ManifestParser.parse(dict, snippetSource: text)
     }
 
+    /// `<name>.glintext` in `directory`, unless that folder holds a *different* extension (or something unreadable);
+    /// then `<name>-2.glintext`, `<name>-3.glintext`, … so an unrelated extension is never replaced.
+    public static func availableFolder(named name: String, forIdentifier identifier: String, in directory: URL,
+                                       pathExtension: String = "glintext") -> URL {
+        let fm = FileManager.default
+        var n = 1
+        while true {
+            let candidate = directory.appendingPathComponent(n == 1 ? "\(name).\(pathExtension)" : "\(name)-\(n).\(pathExtension)",
+                                                             isDirectory: true)
+            guard fm.fileExists(atPath: candidate.path) else { return candidate }
+            if (try? load(folder: candidate, evaluateModules: false))?.identifier == identifier { return candidate }
+            n += 1
+        }
+    }
+
     /// Converts a snippet into a bundle folder on disk so it survives restarts.
     @discardableResult
     public static func installSnippet(_ text: String, into directory: URL) throws -> URL {
@@ -288,9 +311,10 @@ public enum ExtensionLoader {
         var safe = manifest.identifier.replacingOccurrences(of: "/", with: "-")
         while safe.hasPrefix(".") { safe.removeFirst() } // hidden folders are never loaded
         if safe.isEmpty { safe = "extension-\(UUID().uuidString.prefix(8))" }
-        let folder = directory.appendingPathComponent(safe + ".glintext", isDirectory: true)
+        let folder = availableFolder(named: safe, forIdentifier: manifest.identifier, in: directory)
         let fm = FileManager.default
-        if fm.fileExists(atPath: folder.path) { try fm.removeItem(at: folder) }
+        // Replacing the same extension: the old copy goes to the Trash, not deleted outright.
+        if fm.fileExists(atPath: folder.path) { try fm.trashItem(at: folder, resultingItemURL: nil) }
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         try text.write(to: folder.appendingPathComponent("Snippet.txt"), atomically: true, encoding: .utf8)
         return folder

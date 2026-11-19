@@ -248,7 +248,11 @@ final class ActionRegistry: ObservableObject {
     func install(bundleAt url: URL) throws -> ExtensionManifest {
         _ = try ExtensionLoader.load(folder: url) // validate before touching anything
         let fm = FileManager.default
-        let dest = Self.userExtensionsDirectory.appendingPathComponent(url.lastPathComponent, isDirectory: true)
+        let incoming = try ExtensionLoader.load(folder: url, evaluateModules: false)
+        // Never replace a different extension that happens to use the same folder name.
+        let dest = ExtensionLoader.availableFolder(named: url.deletingPathExtension().lastPathComponent,
+                                                   forIdentifier: incoming.identifier, in: Self.userExtensionsDirectory,
+                                                   pathExtension: url.pathExtension.isEmpty ? "glintext" : url.pathExtension)
         if dest.standardizedFileURL.resolvingSymlinksInPath() != url.standardizedFileURL.resolvingSymlinksInPath() {
             // Copy beside the destination first, then swap, so a failed copy never loses the installed version.
             let staging = Self.userExtensionsDirectory.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)

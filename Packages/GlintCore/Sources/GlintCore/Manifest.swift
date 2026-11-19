@@ -31,7 +31,7 @@ public struct ConfigDict {
             if let v = raw[normalizeKey(k)] {
                 if let b = v as? Bool { return b }
                 if let n = v as? NSNumber { return n.boolValue }
-                if let s = v as? String { return ["true", "yes", "1"].contains(s.lowercased()) }
+                if let s = v as? String { return ["true", "yes", "on", "1"].contains(s.lowercased()) }
             }
         }
         return nil
@@ -126,6 +126,10 @@ public struct OptionSpec: Equatable, Identifiable {
         if let v = c["default value", "default"] {
             if let b = v as? Bool { def = b ? "1" : "0" } else if let s = v as? String { def = s }
             else if let n = v as? NSNumber { def = n.stringValue }
+        }
+        // Boolean options store "1"/"0": accept yes/no/on/off words as defaults too.
+        if kind == .boolean, let d = def?.lowercased() {
+            if ["true", "yes", "on", "1"].contains(d) { def = "1" } else if ["false", "no", "off", "0"].contains(d) { def = "0" }
         }
         self.init(id: id, kind: kind, label: c.string("label", "option label") ?? id,
                   description: c.string("description", "option description"), defaultValue: def,
