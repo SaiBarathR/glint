@@ -693,3 +693,13 @@ final class ReviewRoundTwentyEightTests: XCTestCase {
                        "Sort.popclipext")
     }
 }
+
+final class ReviewRoundThirtyTests: XCTestCase {
+    func testTinyResultsAndFKeys() {
+        XCTAssertEqual(Calculator.format(pow(2, -40)), "9.09494701772928e-13")
+        XCTAssertEqual(Calculator.format(0.00001 * 0.000001), "1e-11")
+        XCTAssertEqual(Calculator.format(0.3 - 0.2 - 0.1), "0")
+        XCTAssertEqual(KeyCombo(string: "f13")?.keyCode, 105)
+        XCTAssertEqual(KeyCombo(string: "command f20")?.keyCode, 90)
+    }
+}

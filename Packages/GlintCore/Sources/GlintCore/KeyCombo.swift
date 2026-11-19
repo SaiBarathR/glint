@@ -94,6 +94,7 @@ public struct KeyCombo: Equatable, Hashable, Codable, CustomStringConvertible {
         "left": 123, "right": 124, "down": 125, "up": 126, "arrowleft": 123, "arrowright": 124, "arrowdown": 125,
         "arrowup": 126, "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97, "f7": 98, "f8": 100,
         "f9": 101, "f10": 109, "f11": 103, "f12": 111, "keypadenter": 76,
+        "f13": 105, "f14": 107, "f15": 113, "f16": 106, "f17": 64, "f18": 79, "f19": 80, "f20": 90,
     ]
 
     public static func keyCode(forName name: String) -> UInt16? {

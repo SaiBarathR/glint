@@ -246,7 +246,9 @@ final class ActionRegistry: ObservableObject {
 
     /// Copies an extension package (.glintext / .popclipext folder) into the user directory.
     @discardableResult
-    func install(bundleAt url: URL) throws -> ExtensionManifest {
+    func install(bundleAt original: URL) throws -> ExtensionManifest {
+        // A symlinked source is copied from its real folder (never the link itself).
+        let url = original.resolvingSymlinksInPath()
         // Validate before touching anything; the user has agreed, so the module's real identifier is used.
         let incoming = try ExtensionLoader.load(folder: url)
         let fm = FileManager.default
@@ -258,9 +260,14 @@ final class ActionRegistry: ObservableObject {
         let sourceName = url.deletingPathExtension().lastPathComponent
         let derived = incoming.identifier == ExtensionLoader.derivedIdentity(of: url)
         // The evaluated module's name/identifier (static naming couldn't see what Config.js exports).
-        let baseName = renamedByUnzip ? ExtensionLoader.folderSlug(derived ? incoming.name : incoming.identifier) : sourceName
-        // The identity it will have once installed: an identifier-less extension is "bundle.<folder>".
-        let identity = derived ? "bundle." + baseName.lowercased() : incoming.identifier
+        // A recorded identity (an installed "<name>-N" copy being reopened) keeps its recorded name.
+        let recordedName = derived && incoming.identifier != "bundle." + sourceName.lowercased()
+            ? String(incoming.identifier.dropFirst("bundle.".count)) : nil
+        let baseName = renamedByUnzip ? ExtensionLoader.folderSlug(derived ? incoming.name : incoming.identifier)
+            : (recordedName ?? sourceName)
+        // The identity it will have once installed: an identifier-less extension renamed from a zip becomes
+        // "bundle.<new name>"; anything else keeps the identity it already has.
+        let identity = renamedByUnzip && derived ? "bundle." + baseName.lowercased() : incoming.identifier
         // Never replace a different extension that happens to use the same folder name.
         let dest = ExtensionLoader.availableFolder(named: baseName, forIdentifier: identity, in: Self.userExtensionsDirectory,
                                                    pathExtension: ExtensionLoader.bundleExtensions.contains(url.pathExtension.lowercased())
@@ -296,11 +303,15 @@ final class ActionRegistry: ObservableObject {
     /// Adds owner write permission throughout a folder (copies keep the source's modes).
     static func makeOwnerWritable(_ url: URL) {
         let fm = FileManager.default
+        // Never follow a top-level symlink (e.g. a developer's linked working copy) out of our folders.
+        if (try? fm.destinationOfSymbolicLink(atPath: url.path)) != nil { return }
         var paths = [url.path]
         if let e = fm.enumerator(atPath: url.path) { while let p = e.nextObject() as? String { paths.append(url.appendingPathComponent(p).path) } }
         for p in paths {
             guard let attrs = try? fm.attributesOfItem(atPath: p), attrs[.type] as? FileAttributeType != .typeSymbolicLink,
                   let mode = (attrs[.posixPermissions] as? NSNumber)?.int16Value else { continue }
+            // Finder's "Locked" (immutable) flag blocks replacing and deleting just like a read-only mode.
+            if (attrs[.immutable] as? NSNumber)?.boolValue == true { try? fm.setAttributes([.immutable: false], ofItemAtPath: p) }
             if mode & 0o200 == 0 { try? fm.setAttributes([.posixPermissions: NSNumber(value: mode | 0o200)], ofItemAtPath: p) }
         }
     }
