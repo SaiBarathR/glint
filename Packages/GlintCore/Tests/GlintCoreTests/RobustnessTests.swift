@@ -530,3 +530,44 @@ final class ReviewRoundTwentyTwoTests: XCTestCase {
         XCTAssertEqual(m.actions.first?.description, "does A")
     }
 }
+
+final class ReviewRoundTwentyThreeTests: XCTestCase {
+    func testHostileYAMLIsRejectedNotCrashedOrHung() {
+        let start = Date()
+        // Non-scalar keys (crash in Yams' constructor), alias-as-key bomb, duplicate keys on one long line.
+        XCTAssertThrowsError(try ExtensionLoader.parseSnippet("#glint\nname: X\nurl: https://x/***\n[a]: b"))
+        XCTAssertThrowsError(try ExtensionLoader.parseSnippet("#glint\nname: X\nurl: https://x/***\n? [a, b]\n: c"))
+        var bomb = "#glint\nname: B\nurl: https://x/***\na0: &a0 [x]\n"
+        for i in 1...30 { bomb += "a\(i): &a\(i) [*a\(i-1), *a\(i-1)]\n" }
+        bomb += "z: {*a30 : 1}\n"
+        XCTAssertThrowsError(try ExtensionLoader.parseSnippet(bomb))
+        let dupes = "#glint\nname: D\nurl: https://x/***\nd: {" + Array(repeating: "a: 1", count: 5000).joined(separator: ", ") + "}"
+        XCTAssertThrowsError(try ExtensionLoader.parseSnippet(dupes))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 3)
+    }
+
+    func testMergeKeysStillWork() throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        #glint
+        name: M
+        defaults: &d
+          after: copy-result
+        actions:
+          - <<: *d
+            title: A
+            url: https://x/***
+        """)
+        XCTAssertEqual(m.actions.first?.after, .copyResult)
+    }
+
+    func testStaticPreviewDoesNotRunModuleCode() throws {
+        let m = try ExtensionLoader.parseSnippet("""
+        // #glint
+        // name: Heavy
+        // language: javascript
+        // module: true
+        while (true) {}
+        """, evaluateModules: false)
+        XCTAssertEqual(m.name, "Heavy")
+    }
+}

@@ -9,12 +9,19 @@ public enum ExtensionLoader {
 
     // MARK: Bundles
 
-    public static func loadBundle(at url: URL, isBuiltIn: Bool = false) throws -> ExtensionManifest {
+    /// - Parameter evaluateModules: false reads only static information (no JavaScript runs), for showing an
+    ///   install prompt before the user has agreed to anything; module actions are then left out.
+    public static func loadBundle(at url: URL, isBuiltIn: Bool = false, evaluateModules: Bool = true) throws -> ExtensionManifest {
         let fm = FileManager.default
         for name in configNames {
             let file = url.appendingPathComponent(name)
             guard fm.fileExists(atPath: file.path) else { continue }
             let ext = file.pathExtension.lowercased()
+            if (ext == "js" || ext == "ts"), !evaluateModules {
+                let folder = url.deletingPathExtension().lastPathComponent
+                return ExtensionManifest(identifier: "bundle." + folder.lowercased(), name: folder, actions: [],
+                                         bundleURL: url, isBuiltIn: isBuiltIn)
+            }
             if ext == "js" || ext == "ts" {
                 let src = try String(contentsOf: file, encoding: .utf8)
                 var m = try loadJavaScriptModule(source: src, bundleURL: url, isBuiltIn: isBuiltIn)
@@ -27,7 +34,7 @@ public enum ExtensionLoader {
             let dict = try readDictionary(file)
             var manifest = try ManifestParser.parse(dict, bundleURL: url, isBuiltIn: isBuiltIn)
             // `module: file.js` in a static config: the module supplies the actions.
-            if manifest.actions.isEmpty, let source = manifest.moduleSource {
+            if evaluateModules, manifest.actions.isEmpty, let source = manifest.moduleSource {
                 var module = try loadJavaScriptModule(source: source, bundleURL: url, isBuiltIn: isBuiltIn, headerConfig: dict,
                                                       moduleDir: manifest.moduleDir)
                 if module.options.isEmpty { module.options = manifest.options }
@@ -63,7 +70,18 @@ public enum ExtensionLoader {
     /// alias bombs before they're expanded, since snippets are parsed before the user agrees to install.
     static let yamlNodeBudget = 50_000
 
+    /// Configs larger than this are refused before parsing.
+    static let yamlMaxBytes = 256 * 1024
+    /// Alias references allowed (`*name`). Real configs use a handful (`<<: *defaults`); bounding them bounds how
+    /// much aliases can expand, including work Yams does while composing (e.g. hashing aliased keys).
+    static let yamlMaxAliases = 24
+    private static let aliasPattern = try! NSRegularExpression(pattern: #"(?:^|[\s\[\{,:?])\*[A-Za-z0-9_\-]+"#,
+                                                               options: [.anchorsMatchLines])
+
     public static func parseYAMLDictionary(_ text: String) throws -> [String: Any] {
+        guard text.utf8.count <= yamlMaxBytes else { throw ManifestError.invalidYAML("The extension config is too large.") }
+        let aliases = aliasPattern.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+        guard aliases <= yamlMaxAliases else { throw ManifestError.invalidYAML("The extension config uses too many aliases.") }
         let object: Any?
         do {
             if let root = try Yams.compose(yaml: text) {
@@ -72,7 +90,12 @@ public enum ExtensionLoader {
                     count += 1
                     if count > yamlNodeBudget { throw ManifestError.invalidYAML("The extension config is too large.") }
                     switch node {
-                    case .mapping(let m): for (k, v) in m { try walk(k); try walk(v) }
+                    case .mapping(let m):
+                        for (k, v) in m {
+                            // Keys must be plain values (Yams crashes constructing others).
+                            guard case .scalar = k else { throw ManifestError.invalidYAML("Keys must be plain text.") }
+                            try walk(k); try walk(v)
+                        }
                     case .sequence(let s): for v in s { try walk(v) }
                     default: break
                     }
@@ -80,7 +103,13 @@ public enum ExtensionLoader {
                 try walk(root)
             }
             object = try Yams.load(yaml: text)
-        } catch let e as ManifestError { throw e } catch { throw ManifestError.invalidYAML("\(error)") }
+        } catch let e as ManifestError { throw e } catch {
+            // Keep messages short: some Yams errors embed the source line once per problem.
+            if let y = error as? YamlError, case .duplicatedKeysInMapping = y {
+                throw ManifestError.invalidYAML("The extension config has duplicate keys.")
+            }
+            throw ManifestError.invalidYAML(String(String(describing: error).prefix(300)))
+        }
         guard let dict = object as? [String: Any] else { throw ManifestError.notADictionary }
         return dict
     }
@@ -159,7 +188,7 @@ public enum ExtensionLoader {
     ///  1. YAML snippets: `#glint` header line followed by YAML config.
     ///  2. Inverted snippets: code whose header comment lines hold the YAML config, e.g.
     ///     `// #glint` / `// name: Upper` / `// language: javascript` then the script body.
-    public static func parseSnippet(_ text: String) throws -> ExtensionManifest {
+    public static func parseSnippet(_ text: String, evaluateModules: Bool = true) throws -> ExtensionManifest {
         var lines = text.components(separatedBy: .newlines)
         while let f = lines.first, f.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeFirst() }
         guard let header = lines.first else { throw ManifestError.missingName }
@@ -191,6 +220,13 @@ public enum ExtensionLoader {
             if let lang = c.string("language"), ["javascript", "js"].contains(normalizeKey(lang)),
                c.bool("module") == true || code.contains("exports.actions") || code.contains("exports.action ")
                 || code.contains("module.exports") {
+                guard evaluateModules else {
+                    // Static preview: name and identifier from the header, no JavaScript evaluated.
+                    let name = c.string("name") ?? "JavaScript Extension"
+                    return ExtensionManifest(identifier: c.string("identifier") ?? ManifestParser.derivedIdentifier(name: name),
+                                             name: name, description: c.string("description"), actions: [],
+                                             snippetSource: text)
+                }
                 return try loadJavaScriptModule(source: code, bundleURL: nil, isBuiltIn: false, snippetSource: text,
                                                 headerConfig: config)
             }
@@ -228,17 +264,17 @@ public enum ExtensionLoader {
     }
 
     /// Loads either a bundle with a Config file or a folder holding a saved Snippet.txt.
-    public static func load(folder: URL, isBuiltIn: Bool = false) throws -> ExtensionManifest {
+    public static func load(folder: URL, isBuiltIn: Bool = false, evaluateModules: Bool = true) throws -> ExtensionManifest {
         let snippet = folder.appendingPathComponent("Snippet.txt")
         if FileManager.default.fileExists(atPath: snippet.path) {
             let text = try String(contentsOf: snippet, encoding: .utf8)
-            var m = try parseSnippet(text)
+            var m = try parseSnippet(text, evaluateModules: evaluateModules)
             m.bundleURL = folder
             m.sourceURL = folder
             m.isBuiltIn = isBuiltIn
             return m
         }
-        return try loadBundle(at: folder, isBuiltIn: isBuiltIn)
+        return try loadBundle(at: folder, isBuiltIn: isBuiltIn, evaluateModules: evaluateModules)
     }
 
     /// Loads every extension in a directory. Failures are returned alongside successes.

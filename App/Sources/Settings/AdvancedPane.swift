@@ -73,10 +73,10 @@ struct AdvancedPane: View {
             Text("Every Glint setting goes back to its default, including action order, shortcuts and excluded apps.")
         }
         .alert("Settings were reset", isPresented: $resetDone) {
+            // Relaunch is required: the running app still holds the old values and would write them back.
             Button("Relaunch Now", action: Self.relaunch)
-            Button("Later", role: .cancel) {}
         } message: {
-            Text("Relaunch Glint to finish resetting.")
+            Text("Glint will relaunch to finish resetting.")
         }
     }
 

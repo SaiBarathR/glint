@@ -83,16 +83,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             var failures: [String] = []
             for url in bundles {
                 do {
-                    let manifest = try ExtensionLoader.load(folder: url)
+                    // Read the prompt's details statically: an extension's JavaScript runs only after Install.
+                    let manifest = try ExtensionLoader.load(folder: url, evaluateModules: false)
                     let alert = NSAlert()
                     alert.messageText = "Install “\(manifest.name)”?"
-                    let kinds = manifest.actions.map(\.title).joined(separator: ", ")
+                    let kinds = manifest.actions.isEmpty ? "defined in JavaScript" : manifest.actions.map(\.title).joined(separator: ", ")
                     alert.informativeText = "\(manifest.description ?? "")\n\nActions: \(kinds)\n\nOnly install extensions from people you trust: they can run scripts on your Mac."
                     alert.addButton(withTitle: "Install")
                     alert.addButton(withTitle: "Cancel")
                     if alert.runModal() == .alertFirstButtonReturn {
-                        try ActionRegistry.shared.install(bundleAt: url)
-                        SettingsWindowController.shared.show(extensionKey: manifest.identifier)
+                        let installed = try ActionRegistry.shared.install(bundleAt: url)
+                        SettingsWindowController.shared.show(extensionKey: installed.identifier)
                     }
                 } catch {
                     // With one bundle the alert already names the file; a flat zip's folder name is temporary.
@@ -195,15 +196,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             guard let snippet = comps?.queryItems?.first(where: { $0.name == "snippet" })?.value else { return }
             NSApp.activate(ignoringOtherApps: true)
             do {
-                let m = try ExtensionLoader.parseSnippet(snippet)
+                // Nothing from the link runs before the user agrees: read the name statically.
+                let m = try ExtensionLoader.parseSnippet(snippet, evaluateModules: false)
                 let alert = NSAlert()
                 alert.messageText = "Install “\(m.name)”?"
                 alert.informativeText = "Only install extensions from people you trust: they can run scripts on your Mac."
                 alert.addButton(withTitle: "Install")
                 alert.addButton(withTitle: "Cancel")
                 if alert.runModal() == .alertFirstButtonReturn {
-                    try ActionRegistry.shared.install(snippet: snippet)
-                    SettingsWindowController.shared.show(extensionKey: m.identifier)
+                    let installed = try ActionRegistry.shared.install(snippet: snippet)
+                    SettingsWindowController.shared.show(extensionKey: installed.identifier)
                 }
             } catch { NSAlert(error: error).runModal() }
         case "pause": prefs.enabled = false

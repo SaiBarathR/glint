@@ -119,6 +119,7 @@ public enum JavaScriptRunner {
       put: function(url, data, cfg) { cfg = cfg || {}; cfg.url = url; cfg.data = data; cfg.method = 'PUT'; return __axios.request(cfg); },
       delete: function(url, cfg) { cfg = cfg || {}; cfg.url = url; cfg.method = 'DELETE'; return __axios.request(cfg); },
       create: function(defaults) {
+        defaults = defaults || {};
         var inst = Object.create(__axios);
         inst.request = function(cfg) {
           var merged = Object.assign({}, defaults, cfg);
