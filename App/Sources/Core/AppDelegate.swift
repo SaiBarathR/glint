@@ -159,7 +159,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
             let derived = m.identifier.hasPrefix("bundle.") || m.identifier.hasPrefix("snippet.")
             let raw = derived ? m.name : m.identifier
             let slug = raw.lowercased().map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? $0 : "-" }
-            let name = String(slug).split(separator: "-").joined(separator: "-")
+            var name = String(slug).split(separator: "-").joined(separator: "-")
+            while name.hasPrefix(".") { name.removeFirst() } // a hidden folder would never load
             let target = temp.appendingPathComponent((name.isEmpty ? "extension" : name) + ".glintext", isDirectory: true)
             if target != root, (try? fm.moveItem(at: root, to: target)) != nil { found = [target] }
         }

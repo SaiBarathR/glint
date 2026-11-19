@@ -251,7 +251,7 @@ final class PopupController {
         guard Preferences.shared.showHoverLabels else { return }
         // Show for icon-only items, truncated titles, and hints that differ from the visible text.
         guard inside, let tip = v.item.tooltip, v.item.handler != nil || v.isTruncated || v.isMultilineLabel,
-              !v.showsTitle || v.isTruncated || tip != v.visibleTitle else {
+              !v.showsTitle || v.isTruncated || v.isMultilineLabel || tip != v.visibleTitle else {
             hoverLabel.orderOut(nil)
             return
         }
