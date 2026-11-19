@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ServiceManagement
 
 struct AdvancedPane: View {
     @ObservedObject private var prefs = Preferences.shared
@@ -83,6 +84,10 @@ struct AdvancedPane: View {
         guard let id = Bundle.main.bundleIdentifier else { return }
         UserDefaults.standard.removePersistentDomain(forName: id)
         UserDefaults.standard.synchronize()
+        // Settings that live outside UserDefaults: launch at login and secret extension options.
+        try? SMAppService.mainApp.unregister()
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                       kSecAttrService as String: "dev.saibarath.glint.options"] as CFDictionary)
         resetDone = true
     }
 

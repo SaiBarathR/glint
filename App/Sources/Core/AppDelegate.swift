@@ -95,7 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
                         SettingsWindowController.shared.show(extensionKey: manifest.identifier)
                     }
                 } catch {
-                    failures.append("“\(url.lastPathComponent)”: \(error.localizedDescription)")
+                    // With one bundle the alert already names the file; a flat zip's folder name is temporary.
+                    failures.append(bundles.count == 1 ? error.localizedDescription
+                                                       : "“\(url.lastPathComponent)”: \(error.localizedDescription)")
                 }
             }
             if !failures.isEmpty {

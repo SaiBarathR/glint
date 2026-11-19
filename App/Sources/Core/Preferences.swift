@@ -150,7 +150,9 @@ final class Preferences: ObservableObject {
 
     var searchTemplate: String {
         if searchEngineID == "custom", !customSearchTemplate.isEmpty { return customSearchTemplate }
-        return SearchEngine.all.first { $0.id == searchEngineID }?.template ?? SearchEngine.all[0].template
+        // "Custom" with an empty URL (or an unknown id) falls back to the first engine rather than doing nothing.
+        return SearchEngine.all.first { $0.id == searchEngineID && !$0.template.isEmpty }?.template
+            ?? SearchEngine.all[0].template
     }
 
     // MARK: Extension options

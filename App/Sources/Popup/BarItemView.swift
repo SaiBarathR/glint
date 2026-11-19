@@ -81,13 +81,13 @@ final class BarItemView: NSView {
         para.lineBreakMode = .byTruncatingTail
         var color = style.foreground
         if case .label = item.kind, item.handler == nil { color = style.foreground }
-        return NSAttributedString(string: title.replacingOccurrences(of: "\n", with: " ⏎ "),
+        return NSAttributedString(string: title.split(whereSeparator: \.isNewline).joined(separator: " ⏎ "),
                                   attributes: [.font: style.font, .foregroundColor: color, .paragraphStyle: para])
     }
 
     /// A result whose text has several lines (shown joined with ⏎ on the bar).
     var isMultilineLabel: Bool {
-        if case .label(let t) = item.kind { return t.contains("\n") }
+        if case .label(let t) = item.kind { return t.contains(where: \.isNewline) } // also \r\n
         return false
     }
 
