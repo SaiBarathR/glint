@@ -1,0 +1,7 @@
+#glint
+name: New Sticky
+identifier: io.github.saibarathr.glint.gallery.new-sticky
+description: Put the selection on a new note in Stickies, through the "Make New Sticky Note" service that comes with macOS.
+icon: symbol:note.text
+author: Glint gallery
+service name: Make New Sticky Note

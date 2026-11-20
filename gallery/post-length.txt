@@ -1,0 +1,35 @@
+// #glint
+// name: Post Length
+// identifier: io.github.saibarathr.glint.gallery.post-length
+// description: Count the selection the way social networks do before you post it. X counts links as 23 and CJK characters and emoji as 2; Mastodon counts links as 23; Bluesky counts what you see.
+// icon: symbol:character.cursor.ibeam
+// author: Glint gallery
+// after: show-result
+// options:
+//   - identifier: network
+//     label: Count like
+//     type: multiple
+//     values: [x, mastodon, bluesky]
+//     value labels: [X (280), Mastodon (500), Bluesky (300)]
+//     default value: x
+var network = glint.options.network || 'x';
+var limit = { x: 280, mastodon: 500, bluesky: 300 }[network] || 280;
+var text = glint.input.text.normalize('NFC');
+var used = 0;
+if (network === 'bluesky') {
+  // One per visible character (grapheme), so a family emoji counts once.
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    used = Array.from(new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text)).length;
+  } else {
+    used = Array.from(text).length;
+  }
+} else {
+  text = text.replace(/https?:\/\/\S+/gi, function () { used += 23; return ''; });
+  for (var ch of text) {
+    var c = ch.codePointAt(0);
+    var light = c <= 0x10FF || (c >= 0x2000 && c <= 0x200D) || (c >= 0x2010 && c <= 0x201F) || (c >= 0x2032 && c <= 0x2037);
+    used += (network === 'x' && !light) ? 2 : 1;
+  }
+}
+var left = limit - used;
+return used + ' / ' + limit + ' · ' + (left >= 0 ? left + ' left' : (-left) + ' over');

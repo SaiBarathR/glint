@@ -1,0 +1,23 @@
+// #glint
+// name: Word Frequency
+// identifier: io.github.saibarathr.glint.gallery.word-frequency
+// description: Show the ten most frequent words in the selection, skipping common filler words. Click the result to copy it.
+// icon: symbol:chart.bar
+// author: Glint gallery
+// after: preview-result
+var stop = new Set(('a an and are as at be been but by can do for from had has have he her his i if in into is it ' +
+  'its me my not of on or our she so than that the their them then there these they this to too up was we were what ' +
+  'when which who will with would you your').split(' '));
+var counts = new Map();
+var words = glint.input.text.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || [];
+words.forEach(function (w) {
+  w = w.replace(/['’]s$/, '').replace(/[-'’]+$/, '');
+  if (w.length < 2 || stop.has(w)) { return; }
+  counts.set(w, (counts.get(w) || 0) + 1);
+});
+if (counts.size === 0) { return 'No words to count'; }
+return Array.from(counts)
+  .sort(function (a, b) { return b[1] - a[1] || a[0].localeCompare(b[0]); })
+  .slice(0, 10)
+  .map(function (e) { return e[0] + ' ×' + e[1]; })
+  .join(' · ');

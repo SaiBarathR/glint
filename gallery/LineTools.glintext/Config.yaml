@@ -1,0 +1,31 @@
+# Line Tools: a bundle whose actions run small shell scripts shipped next to this config.
+# Each script reads the selection on stdin and prints the result.
+name: Line Tools
+identifier: io.github.saibarathr.glint.gallery.line-tools
+description: Remove duplicate or blank lines, reverse, shuffle, sort by length or number the selected lines. Offered when the selection has more than one line.
+icon: symbol:list.bullet
+author: Glint gallery
+after: paste-result
+# Only when the selection spans at least two lines (the lookahead keeps the whole selection as input).
+regex: '^(?=[\s\S]*\n)[\s\S]*$'
+actions:
+  - title: Remove Duplicates
+    icon: symbol:line.3.horizontal.decrease
+    description: Keep the first copy of every line, in the original order.
+    shell script file: unique.sh
+  - title: Remove Blank Lines
+    icon: symbol:arrow.up.and.down.text.horizontal
+    shell script file: remove-blank.sh
+  - title: Reverse Lines
+    icon: symbol:arrow.uturn.up
+    shell script file: reverse.sh
+  - title: Shuffle Lines
+    icon: symbol:shuffle
+    shell script file: shuffle.sh
+  - title: Sort by Length
+    icon: symbol:chart.bar.xaxis
+    description: Shortest line first. Lines of equal length keep their order.
+    shell script file: by-length.sh
+  - title: Number Lines
+    icon: symbol:list.number
+    shell script file: number.sh

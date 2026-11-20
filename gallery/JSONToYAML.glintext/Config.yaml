@@ -1,0 +1,10 @@
+# JSON to YAML: one action that runs a JavaScript file from this folder.
+name: JSON to YAML
+identifier: io.github.saibarathr.glint.gallery.json-to-yaml
+description: Convert selected JSON into YAML, with strings quoted only where YAML needs it. Invalid JSON shows ✗.
+icon: symbol:curlybraces.square
+author: Glint gallery
+after: paste-result
+# Offered when the selection starts with { or [ and ends with } or ].
+regex: '^\s*[\[{][\s\S]*[\]}]\s*$'
+javascript file: to-yaml.js

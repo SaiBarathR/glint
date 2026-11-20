@@ -1,0 +1,8 @@
+---
+// docs/EXTENSIONS.md is the single source of truth for the extension format; this page renders it as is.
+import Docs from '../../layouts/Docs.astro';
+import { Content, getHeadings } from '../../../../docs/EXTENSIONS.md';
+---
+<Docs title="Extension reference" description="Every Glint extension config key, action kind, requirement, placeholder, environment variable and JavaScript API call." path="docs/reference/" headings={getHeadings()} source="docs/EXTENSIONS.md">
+  <Content />
+</Docs>

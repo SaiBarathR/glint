@@ -1,0 +1,333 @@
+---
+import { Code } from 'astro:components';
+import Base from '../layouts/Base.astro';
+import { codeThemes } from '../lib/code-themes.mjs';
+import ExtIcon from '../components/ExtIcon.astro';
+import { icon } from '../lib/icons';
+import { url, SITE } from '../lib/site';
+import { bundledExtensions, galleryExtensions, installLink, snippetLang, type ExtInfo } from '../lib/extensions';
+
+const themes = codeThemes;
+const bundled = bundledExtensions();
+const { categories, extensions: gallery } = galleryExtensions();
+
+// Categories for the bundled extensions, so one filter covers the whole page.
+const bundledCategory: Record<string, string> = {
+  'change-case': 'Text', 'sort-lines': 'Text', whitespace: 'Text', wrap: 'Text', 'straight-quotes': 'Text', 'plain-text': 'Text',
+  'markdown-link': 'Writing', 'url-encode': 'Developer', base64: 'Developer', 'format-json': 'Developer', hash: 'Developer',
+  codepoints: 'Developer', reminders: 'Everyday', notes: 'Everyday', 'open-in-terminal': 'Everyday', 'run-shortcut': 'Everyday',
+};
+const categoryOf = (e: ExtInfo) => e.category ?? bundledCategory[e.slug] ?? (e.kinds.includes('URL') ? 'Web & search' : 'Text');
+const searchText = (e: ExtInfo) =>
+  [e.name, e.description, e.identifier, ...e.actions.map((a) => a.title), ...e.kinds, categoryOf(e)].join(' ').toLowerCase();
+const counts = Object.fromEntries(categories.map((c) => [c, [...bundled, ...gallery].filter((e) => categoryOf(e) === c).length]));
+const langFor = (name: string, lang: string, content: string) => (name.endsWith('.txt') ? snippetLang(content) : lang);
+---
+<Base title="Extensions" path="extensions/" description={`The ${bundled.length} extensions included with Glint, and a gallery of ${gallery.length} more you can install in one click.`}>
+  <section class="page-hero">
+    <div class="container">
+      <h1>Extensions</h1>
+      <p>
+        The gallery has {gallery.length} extensions you can install in one click, and {bundled.length} more come with Glint.
+        Every one is a short, readable file: look at the source before you install it.
+      </p>
+      <ul class="how" role="list">
+        <li><span set:html={icon('mouse-pointer-click', 18)} /><div><strong>Install</strong> opens Glint, which shows what the extension does and asks before adding it. It needs Glint installed.</div></li>
+        <li><span set:html={icon('text-select', 18)} /><div>Or <strong>select a snippet's text</strong> on this page and click <strong>Install Extension</strong> in Glint's bar.</div></li>
+        <li><span set:html={icon('file-down', 18)} /><div>Or <strong>download</strong> the <code>.glintextz</code> file and double-click it.</div></li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="filter-bar">
+    <div class="container filter-inner">
+      <label class="search">
+        <span class="visually-hidden">Search extensions</span>
+        <span class="search-icon" set:html={icon('search', 17)} />
+        <input type="search" id="ext-search" placeholder="Search extensions" autocomplete="off" spellcheck="false" />
+      </label>
+      <div class="cats" role="group" aria-label="Filter by category">
+        <button type="button" class="cat" aria-pressed="true" data-cat="">All</button>
+        {categories.map((c) => <button type="button" class="cat" aria-pressed="false" data-cat={c}>{c} <span class="cat-count">{counts[c]}</span></button>)}
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <section class="ext-section" aria-labelledby="gallery-title" data-section>
+      <div class="section-intro">
+        <h2 id="gallery-title">Gallery</h2>
+        <p>Extensions written for this site, in every format Glint supports. All of them run offline except the web searches, and each is checked by Glint's test suite.</p>
+      </div>
+      <ul class="gallery-grid" role="list">
+        {gallery.map((e) => {
+          const example = e.examples[0];
+          return (
+            <li class="g-card card" id={e.slug} data-ext data-cat={categoryOf(e)} data-search={searchText(e)}>
+              <div class="g-head">
+                <ExtIcon icon={e.icon} size="lg" />
+                <div class="g-title">
+                  <h3>{e.name}</h3>
+                  <p class="meta">
+                    <span class="badge">{categoryOf(e)}</span>
+                    <span class="meta-text">{e.kinds.join(' · ')}</span>
+                  </p>
+                </div>
+              </div>
+              <p class="g-desc">{e.description}</p>
+
+              {example && (
+                <div class="example" aria-label="Example">
+                  {example.output !== undefined || example.displayOutput !== undefined ? (
+                    <>
+                      <div class="ex-row"><span class="ex-label">{e.actions.length > 1 ? example.action : 'Selected'}</span><code class="ex-val">{example.display ?? example.input}</code></div>
+                      <div class="ex-row"><span class="ex-label">{example.note ?? 'Result'}</span><code class="ex-val ex-out">{example.displayOutput ?? example.output}</code></div>
+                    </>
+                  ) : (
+                    <div class="ex-row"><span class="ex-label">Does</span><span class="ex-text">{example.display ?? example.input}</span></div>
+                  )}
+                </div>
+              )}
+
+              {e.actions.length > 1 && (
+                <ul class="acts" role="list" aria-label="Actions">
+                  {e.actions.map((a) => <li><ExtIcon icon={a.icon} size="sm" /> {a.title}</li>)}
+                </ul>
+              )}
+              {e.options.length > 0 && (
+                <p class="opts"><span set:html={icon('sliders-horizontal', 15)} /> Settings: {e.options.map((o) => o.label).join(', ')}</p>
+              )}
+
+              <div class="g-actions">
+                {e.snippet && (
+                  <a class="btn btn-primary btn-sm" href={installLink(e.snippet)} title="Opens Glint, which asks before installing">
+                    <span set:html={icon('plus', 15)} /> Install
+                  </a>
+                )}
+                <a class="btn btn-secondary btn-sm" href={url(`downloads/${e.slug}.glintextz`)} download={`${e.folderName}z`}>
+                  <span set:html={icon('download', 15)} /> Download
+                </a>
+                {e.snippet && (
+                  <>
+                    <template id={`snippet-${e.slug}`}>{e.snippet}</template>
+                    <button type="button" class="btn btn-ghost btn-sm" data-copy-target={`snippet-${e.slug}`} aria-label={`Copy snippet: ${e.name}`}>
+                      <span class="idle-icon" set:html={icon('copy', 15)} /><span class="copy-label">Copy snippet</span>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <details class="source">
+                <summary><span set:html={icon('chevron-right', 16)} /> View source <span class="src-format">{e.format}</span></summary>
+                <div class="source-body">
+                  {e.files.map((f) => (
+                    <div class="src-file">
+                      {e.files.length > 1 && <p class="src-name">{f.name}</p>}
+                      <Code code={f.content.replace(/\n$/, '')} lang={langFor(f.name, f.lang, f.content) as any} themes={themes} defaultColor={false} data-copy />
+                    </div>
+                  ))}
+                  <p class="src-link"><a href={`${SITE.repo}/tree/main/${e.repoPath}`}>{e.repoPath} on GitHub</a></p>
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    <section class="ext-section" aria-labelledby="bundled-title" data-section>
+      <div class="section-intro">
+        <h2 id="bundled-title">Included with Glint</h2>
+        <p>These ship inside the app. <strong>Translate</strong> is on by default; turn on the others in <strong>Settings → Actions</strong>. Their source is in <a href={`${SITE.repo}/tree/main/App/Resources/Extensions`}>App/Resources/Extensions</a>, one example of each extension format.</p>
+      </div>
+      <ul class="bundled-grid" role="list">
+        {bundled.map((e) => (
+          <li class="b-card card" id={`bundled-${e.slug}`} data-ext data-cat={categoryOf(e)} data-search={searchText(e)}>
+            <div class="b-head">
+              <ExtIcon icon={e.icon} />
+              <div class="b-title">
+                <h3>{e.name}</h3>
+                <p class="meta"><span class="meta-text">{e.kinds.join(' · ')}</span></p>
+              </div>
+            </div>
+            <p class="b-desc">{e.description}</p>
+            {e.actions.length > 1 && (
+              <ul class="acts" role="list" aria-label="Actions">
+                {e.actions.map((a) => <li><ExtIcon icon={a.icon} size="sm" /> {a.title}</li>)}
+              </ul>
+            )}
+            <p class="b-foot">
+              <span set:html={icon(e.slug === 'translate' ? 'circle-check' : 'toggle-right', 15)} />
+              {e.slug === 'translate' ? 'On by default' : 'Turn it on in Settings → Actions'}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <p class="empty" id="ext-empty" hidden>No extensions match. <button type="button" class="link-btn" id="ext-reset">Show all</button></p>
+
+    <section class="write card" aria-labelledby="write-title">
+      <div>
+        <h2 id="write-title">Write your own</h2>
+        <p>Start with a three-line snippet, or a folder with a config and a script. The guide walks through three small extensions.</p>
+      </div>
+      <div class="write-actions">
+        <a class="btn btn-primary" href={url('docs/writing-extensions/')}>Writing extensions</a>
+        <a class="btn btn-secondary" href={url('docs/reference/')}>Reference</a>
+      </div>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .how { list-style: none; padding: 0; margin: 26px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .how li { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 14.5px; line-height: 1.55; color: var(--text-2); }
+  .how li > span { flex-shrink: 0; color: var(--accent-text); margin-top: 2px; }
+  .how li > span :global(svg) { display: block; }
+  .how strong { color: var(--text); font-weight: 620; }
+  .how code { font-size: 0.9em; }
+  @media (max-width: 860px) { .how { grid-template-columns: minmax(0, 1fr); } }
+
+  .filter-bar {
+    position: sticky; top: var(--header-h); z-index: 20; padding: 12px 0; margin-top: 24px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-inner { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+  .search { position: relative; flex: 1 1 240px; max-width: 340px; display: block; }
+  .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+  .search-icon :global(svg) { display: block; }
+  .search input {
+    width: 100%; height: 40px; padding: 0 12px 0 38px; border-radius: 10px; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text); font: 15px/1 var(--font);
+  }
+  .search input::placeholder { color: var(--text-3); }
+  .search input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cat {
+    display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: 550 14px/1 var(--font); cursor: pointer; white-space: nowrap;
+  }
+  .cat:hover { color: var(--text); border-color: var(--border-strong); }
+  .cat[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+  .cat-count { font-size: 12px; font-weight: 600; color: var(--text-3); }
+  .cat[aria-pressed="true"] .cat-count { color: inherit; opacity: 0.8; }
+  @media (max-width: 720px) {
+    .filter-bar { position: static; }
+    .search { max-width: none; flex-basis: 100%; }
+  }
+
+  .ext-section { margin-top: 56px; }
+  .section-intro { margin-bottom: 24px; max-width: 760px; }
+  .section-intro h2 { font-size: 28px; font-weight: 750; letter-spacing: -0.02em; }
+  .section-intro p { margin-top: 8px; color: var(--text-2); }
+
+  .gallery-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  @media (max-width: 860px) { .gallery-grid { grid-template-columns: minmax(0, 1fr); } }
+  .g-card { padding: 22px; min-width: 0; display: flex; flex-direction: column; gap: 14px; scroll-margin-top: calc(var(--header-h) + 80px); }
+  .g-head, .b-head { display: flex; gap: 14px; align-items: center; min-width: 0; }
+  .g-title, .b-title { min-width: 0; }
+  .g-title h3 { font-size: 18px; font-weight: 680; }
+  .b-title h3 { font-size: 16px; font-weight: 650; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font-size: 13px; color: var(--text-3); }
+  .badge { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); font-weight: 600; font-size: 12.5px; }
+  .g-desc, .b-desc { color: var(--text-2); font-size: 15px; line-height: 1.6; }
+
+  .example { border-radius: 10px; background: var(--code-bg); border: 1px solid var(--border); padding: 10px 12px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; min-width: 0; }
+  .ex-row { display: contents; }
+  .ex-label { padding-top: 2px; max-width: 9.5em; }
+  .ex-label { font-size: 12px; line-height: 1.5; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); }
+  .ex-val { font: 13.5px/1.55 var(--mono); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ex-out { color: var(--accent-text); }
+  .ex-text { font-size: 14.5px; color: var(--text); }
+
+  .acts { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .acts li { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 3px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; font-weight: 550; color: var(--text-2); }
+  .opts { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-3); }
+  .opts :global(svg) { display: block; flex-shrink: 0; }
+
+  .g-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 2px; }
+  .g-actions :global(svg) { display: block; }
+  .g-actions .btn-ghost .idle-icon { display: inline-flex; }
+  .g-actions .btn-ghost.copied { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+
+  .source { border-top: 1px solid var(--border); padding-top: 12px; min-width: 0; }
+  .source summary {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 14px; font-weight: 600;
+    color: var(--text-2); padding: 4px 8px 4px 4px; margin-left: -4px; border-radius: 8px; max-width: 100%;
+  }
+  .source summary::-webkit-details-marker { display: none; }
+  .source summary:hover { color: var(--text); background: var(--bg-soft); }
+  .source summary :global(svg) { display: block; transition: transform .15s; flex-shrink: 0; }
+  .source[open] summary :global(svg) { transform: rotate(90deg); }
+  .src-format { font-weight: 500; color: var(--text-3); font-size: 13px; margin-left: 4px; }
+  .source-body { margin-top: 12px; display: grid; gap: 14px; min-width: 0; }
+  .src-file { min-width: 0; }
+  .src-name { font: 600 13px/1.4 var(--mono); color: var(--text-2); margin-bottom: 6px; }
+  .source-body :global(pre.astro-code) { font-size: 12.75px; max-height: 420px; overflow: auto; }
+  .src-link { font-size: 13.5px; }
+
+  .bundled-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 1000px) { .bundled-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .bundled-grid { grid-template-columns: minmax(0, 1fr); } }
+  .b-card { padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .b-desc { font-size: 14.5px; }
+  .b-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-3); }
+  .b-foot :global(svg) { display: block; flex-shrink: 0; color: var(--accent-text); }
+
+  @media (max-width: 480px) {
+    .g-card { padding: 18px 16px; }
+    .example { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .ex-label { max-width: none; padding-top: 6px; }
+    .ex-label:first-child { padding-top: 0; }
+  }
+  [data-ext][hidden], [data-section][hidden] { display: none !important; }
+  .empty { margin: 48px 0 0; text-align: center; color: var(--text-2); }
+  .link-btn { border: 0; background: none; padding: 0; color: var(--accent-text); font: inherit; text-decoration: underline; cursor: pointer; }
+
+  .write { margin: 72px 0 24px; padding: 28px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+  .write h2 { font-size: 22px; font-weight: 720; }
+  .write p { margin-top: 6px; color: var(--text-2); max-width: 560px; }
+  .write-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+</style>
+
+<script>
+  const input = document.getElementById('ext-search') as HTMLInputElement | null;
+  const cats = Array.from(document.querySelectorAll<HTMLButtonElement>('.cat'));
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-ext]'));
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
+  const empty = document.getElementById('ext-empty');
+  let category = '';
+
+  function apply() {
+    const words = (input?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const card of cards) {
+      const okCat = !category || card.dataset.cat === category;
+      const hay = card.dataset.search ?? '';
+      const ok = okCat && words.every((w) => hay.includes(w));
+      card.hidden = !ok;
+      if (ok) shown++;
+    }
+    for (const s of sections) s.hidden = !s.querySelector('[data-ext]:not([hidden])');
+    if (empty) empty.hidden = shown > 0;
+  }
+  input?.addEventListener('input', apply);
+  for (const btn of cats) {
+    btn.addEventListener('click', () => {
+      category = btn.dataset.cat ?? '';
+      for (const b of cats) b.setAttribute('aria-pressed', String(b === btn));
+      apply();
+    });
+  }
+  document.getElementById('ext-reset')?.addEventListener('click', () => {
+    if (input) input.value = '';
+    category = '';
+    for (const b of cats) b.setAttribute('aria-pressed', String(b.dataset.cat === ''));
+    apply();
+  });
+  // Open a card's source when linked to it (#slug).
+  const target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+  target?.querySelector('details')?.setAttribute('open', '');
+</script>

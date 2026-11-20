@@ -1,0 +1,18 @@
+#glint
+name: Toggle Comment
+identifier: io.github.saibarathr.glint.gallery.toggle-comment
+description: Comment or uncomment the selected lines in code editors by pressing ⌘/ for you. Only shown in the editors listed in the config.
+icon: text://
+author: Glint gallery
+requirements: [editable]
+required apps:
+  - com.microsoft.VSCode
+  - com.apple.dt.Xcode
+  - com.sublimetext.4
+  - dev.zed.Zed
+  - com.todesktop.230313mzl4w4u92
+  - com.panic.Nova
+  - com.jetbrains.intellij
+  - com.jetbrains.WebStorm
+  - com.jetbrains.pycharm
+key combo: command /

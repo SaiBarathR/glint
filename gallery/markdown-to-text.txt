@@ -1,0 +1,33 @@
+#glint
+name: Markdown to Plain Text
+identifier: io.github.saibarathr.glint.gallery.markdown-to-text
+description: Strip Markdown syntax from the selection, leaving readable plain text. Links keep their text, bullets become •, and code keeps its contents.
+icon: symbol:doc.plaintext
+author: Glint gallery
+after: paste-result
+javascript: |
+  var kept = [];
+  function keep(s) { kept.push(s); return '\u0000' + (kept.length - 1) + '\u0000'; }
+  var t = glint.input.text.replace(/\r\n/g, '\n')
+    // Code first, so nothing inside it is touched.
+    .replace(/^[ \t]*(```|~~~)[^\n]*\n([\s\S]*?)\n[ \t]*\1[ \t]*$/gm, function (m, f, code) { return keep(code); })
+    .replace(/`([^`\n]+)`/g, function (m, code) { return keep(code); })
+    .replace(/^ {0,3}#{1,6}[ \t]+(.*?)[ \t#]*$/gm, '$1')                 // headings
+    .replace(/^(.+)\n(?:=+|-+)[ \t]*$/gm, '$1')                          // underlined headings
+    .replace(/^ {0,3}(?:[-*_][ \t]*){3,}$/gm, '')                         // horizontal rules
+    .replace(/^ {0,3}(?:>[ \t]?)+/gm, '')                                 // quotes
+    .replace(/^([ \t]*)[-*+][ \t]+\[[ xX]\][ \t]+/gm, '$1')               // task list boxes
+    .replace(/^([ \t]*)[-*+][ \t]+/gm, '$1• ')                            // bullets
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')                             // images: alt text
+    .replace(/\[([^\]]+)\]\((?:[^()\s]|\([^)]*\))*(?:\s+"[^"]*")?\)/g, '$1') // links: their text
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')                             // reference links
+    .replace(/^ {0,3}\[[^\]]+\]:[ \t]+\S+.*$/gm, '')                      // link definitions
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2')                      // bold
+    .replace(/\*(?=\S)([^*\n]*?\S)\*/g, '$1')                             // italic *
+    .replace(/(^|[^\w])_(?=\S)([^_\n]*?\S)_(?!\w)/g, '$1$2')              // italic _ (not snake_case)
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')                             // strikethrough
+    .replace(/<\/?[A-Za-z][^>]*>/g, '')                                   // inline HTML
+    .replace(/\\([\\`*_{}\[\]()#+\-.!>~|])/g, '$1')                       // escapes
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return t.replace(/\u0000(\d+)\u0000/g, function (m, i) { return kept[Number(i)]; });

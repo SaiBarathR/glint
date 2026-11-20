@@ -1,0 +1,9 @@
+{
+  "name": "Epoch Converter",
+  "identifier": "io.github.saibarathr.glint.gallery.epoch-converter",
+  "description": "Turn a Unix timestamp (seconds or milliseconds) into an ISO 8601 date, or an ISO date back into a timestamp. Hold ⌥ for local time or milliseconds. Click the result to copy it.",
+  "icon": "symbol:clock",
+  "author": "Glint gallery",
+  "after": "preview-result",
+  "module": "main.js"
+}

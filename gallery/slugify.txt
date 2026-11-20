@@ -1,0 +1,17 @@
+// #glint
+// name: Slugify
+// identifier: io.github.saibarathr.glint.gallery.slugify
+// description: Turn the selection into a URL slug. Accents are removed, & becomes "and", and words are joined with hyphens.
+// icon: symbol:link
+// author: Glint gallery
+// after: paste-result
+var slug = glint.input.text
+  .normalize('NFKD')
+  .replace(/[̀-ͯ]/g, '')   // drop the accents NFKD split off
+  .toLowerCase()
+  .replace(/['’]/g, '')              // "don't" -> "dont", not "don-t"
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+if (!slug) { throw new Error('Nothing in the selection can go into a slug'); }
+return slug;

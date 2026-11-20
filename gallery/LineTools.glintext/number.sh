@@ -1,0 +1,3 @@
+#!/bin/sh
+# "1. first line", "2. second line"…
+/usr/bin/awk '{ printf "%d. %s\n", NR, $0 }'

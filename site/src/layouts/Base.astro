@@ -1,0 +1,113 @@
+---
+import '../styles/global.css';
+import { SITE, url } from '../lib/site';
+import { icon as svgIcon } from '../lib/icons';
+import markSvg from '../assets/glint-mark.svg?url';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Path under the site, used for the canonical URL and the active nav item. */
+  path?: string;
+  ogImage?: string;
+}
+const { title, description = SITE.description, path = '' } = Astro.props;
+const fullTitle = title ? `${title} · Glint` : 'Glint · An action bar for selected text on macOS';
+const canonical = new URL(url(path), Astro.site).href;
+const ogImage = new URL(url('og.png'), Astro.site).href;
+const nav = [
+  { href: 'download/', label: 'Download' },
+  { href: 'extensions/', label: 'Extensions' },
+  { href: 'docs/', label: 'Docs' },
+  { href: 'changelog/', label: 'Changelog' },
+];
+const current = (href: string) => (path === href || (href === 'docs/' && path.startsWith('docs/')) ? 'page' : undefined);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href={url('favicon.ico')} sizes="48x48" />
+    <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+    <link rel="icon" type="image/png" href={url('favicon-32.png')} sizes="32x32" />
+    <link rel="apple-touch-icon" href={url('apple-touch-icon.png')} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Glint" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Glint: an action bar above highlighted text" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="sitemap" href={url('sitemap.xml')} />
+    <script is:inline>
+      // Apply the saved theme before first paint.
+      try {
+        var t = localStorage.getItem('glint-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="container">
+        <a class="brand" href={url()} aria-label="Glint home">
+          <img src={markSvg} width="30" height="30" alt="" />
+          <span>Glint</span>
+        </a>
+        <nav class="nav" id="site-nav" aria-label="Main">
+          {nav.map((n) => <a class="nav-link" href={url(n.href)} aria-current={current(n.href)}>{n.label}</a>)}
+        </nav>
+        <div class="header-tools">
+          <a class="icon-btn" href={SITE.repo} aria-label="Glint on GitHub" set:html={svgIcon('github', 19)} />
+          <button class="icon-btn theme-toggle" type="button" aria-label="Switch between light and dark mode">
+            <span class="moon" set:html={svgIcon('moon', 19)} />
+            <span class="sun" set:html={svgIcon('sun', 19)} />
+          </button>
+          <button class="icon-btn menu-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav" set:html={svgIcon('menu', 20)} />
+          <a class="btn btn-primary btn-sm header-download" href={url('download/')}>Download</a>
+        </div>
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <div class="footer-brand"><img src={markSvg} width="28" height="28" alt="" /> Glint</div>
+            <p style="margin-top:10px;max-width:340px">A small, native macOS app that puts actions next to the text you select.</p>
+          </div>
+          <nav class="footer-links" aria-label="Footer">
+            <a href={url('download/')}>Download</a>
+            <a href={url('extensions/')}>Extensions</a>
+            <a href={url('docs/')}>Docs</a>
+            <a href={url('docs/reference/')}>Extension reference</a>
+            <a href={url('changelog/')}>Changelog</a>
+            <a href={SITE.repo}>GitHub</a>
+            <a href={SITE.repo + '/issues'}>Report an issue</a>
+          </nav>
+        </div>
+        <div class="footer-legal">
+          <span>© 2026 Sai Barath · <a href={SITE.repo + '/blob/main/LICENSE'}>MIT License</a></span>
+          <span>Glint is independent and not affiliated with PopClip or Pilotmoon Software.</span>
+          <span>Icons by <a href="https://lucide.dev">Lucide</a></span>
+        </div>
+      </div>
+    </footer>
+    <script>
+      import '../lib/client';
+    </script>
+  </body>
+</html>

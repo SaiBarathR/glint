@@ -1,0 +1,148 @@
+---
+// A faithful HTML/CSS model of Glint's bar over a selection, so the hero stays crisp at every size and follows
+// the page's light/dark theme like the real bar follows the system. The buttons do small demo actions.
+import { icon } from '../lib/icons';
+const actions = [
+  { id: 'search', label: 'Search', svg: icon('search', 18) },
+  { id: 'copy', label: 'Copy', svg: icon('copy', 18) },
+  { id: 'paste', label: 'Paste', svg: icon('clipboard-paste', 18) },
+  { id: 'translate', label: 'Translate', svg: icon('languages', 18) },
+  { id: 'case', label: 'Change Case', text: 'Aa' },
+  { id: 'count', label: 'Word Count', svg: icon('hash', 18) },
+];
+---
+<div class="demo" data-bar-demo>
+  <div class="demo-window" role="group" aria-label="Demo: a text window with Glint's bar over a selection">
+    <div class="demo-titlebar" aria-hidden="true"><span></span><span></span><span></span><em>Notes</em></div>
+    <div class="demo-body">
+      <div class="demo-anchor">
+        <div class="bar" role="toolbar" aria-label="Glint bar (demo)">
+          <div class="bar-items">
+            {actions.map((a, i) => (
+              <>
+                {i > 0 && <span class="sep" aria-hidden="true" />}
+                <button type="button" class="bar-btn" data-act={a.id} aria-label={a.label} title={a.label}>
+                  {a.svg ? <span set:html={a.svg} /> : <span class="bar-text">{a.text}</span>}
+                </button>
+              </>
+            ))}
+          </div>
+          <div class="bar-result" aria-live="polite" hidden></div>
+          <span class="bar-tip" aria-hidden="true"></span>
+        </div>
+      </div>
+      <p class="demo-text">
+        Glint keeps the things you do with text one click away: select a phrase and the
+        <mark class="demo-sel" data-sel>small floating bar</mark> appears right above it, ready to search, copy,
+        translate or reshape it.
+      </p>
+      <p class="demo-text demo-text-2" aria-hidden="true">Then it gets out of the way.</p>
+    </div>
+  </div>
+</div>
+
+<style>
+  .demo { position: relative; width: 100%; max-width: 560px; margin: 0 auto; }
+  .demo-window {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .demo-titlebar {
+    display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+    background: var(--surface-2); border-bottom: 1px solid var(--border);
+  }
+  .demo-titlebar span { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+  .demo-titlebar span:nth-child(2) { background: #febc2e; }
+  .demo-titlebar span:nth-child(3) { background: #28c840; }
+  .demo-titlebar em { margin-left: auto; margin-right: auto; padding-right: 60px; font-style: normal; font-size: 13px; font-weight: 600; color: var(--text-3); }
+  .demo-body { position: relative; padding: 84px 28px 30px; }
+  .demo-text { font-size: 17px; line-height: 1.75; color: var(--text); }
+  .demo-text-2 { margin-top: 10px; color: var(--text-3); }
+  .demo-sel {
+    background: color-mix(in srgb, var(--amber) 80%, transparent); color: #1c1917; border-radius: 3px;
+    padding: 1px 1px; box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  }
+  .demo-anchor { position: absolute; left: 0; right: 0; top: 22px; display: flex; justify-content: center; }
+
+  /* the bar: light in light mode, dark in dark mode, like the real one */
+  .bar {
+    --bar-bg: #fbfbfd; --bar-fg: #1d1d1f; --bar-sep: rgb(0 0 0 / 0.12); --bar-hover: rgb(0 0 0 / 0.07); --bar-border: rgb(0 0 0 / 0.12);
+    position: relative; display: inline-flex; align-items: center; height: 44px; padding: 0 4px;
+    background: var(--bar-bg); color: var(--bar-fg); border: 1px solid var(--bar-border); border-radius: 12px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 10px 30px -8px rgb(0 0 0 / .3);
+  }
+  :global(:root[data-theme="dark"]) .bar { --bar-bg: #1e1d24; --bar-fg: #f5f5f7; --bar-sep: rgb(255 255 255 / 0.14); --bar-hover: rgb(255 255 255 / 0.1); --bar-border: rgb(255 255 255 / 0.12); }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .bar { --bar-bg: #1e1d24; --bar-fg: #f5f5f7; --bar-sep: rgb(255 255 255 / 0.14); --bar-hover: rgb(255 255 255 / 0.1); --bar-border: rgb(255 255 255 / 0.12); }
+  }
+  .bar-items { display: flex; align-items: center; height: 100%; }
+  .bar-btn {
+    display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 36px; padding: 0;
+    border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer;
+  }
+  .bar-btn:hover, .bar-btn:focus-visible { background: var(--bar-hover); }
+  .bar-btn :global(svg) { width: 18px; height: 18px; display: block; }
+  .bar-text { font: 650 14px/1 var(--font); letter-spacing: -0.01em; }
+  .sep { width: 1px; height: 20px; background: var(--bar-sep); margin: 0 1px; }
+  .bar-result { padding: 0 14px; font: 600 14.5px/1 var(--font); white-space: nowrap; }
+  .bar-tip {
+    position: absolute; left: 50%; bottom: -7px; width: 12px; height: 12px; margin-left: -6px;
+    background: var(--bar-bg); border-right: 1px solid var(--bar-border); border-bottom: 1px solid var(--bar-border);
+    transform: rotate(45deg); border-bottom-right-radius: 2px;
+  }
+  .bar.showing-result .bar-items { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .bar { animation: bar-in .45s cubic-bezier(.2,.8,.2,1) .25s both; }
+    @keyframes bar-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+  }
+  @media (max-width: 480px) {
+    .demo-body { padding: 78px 18px 22px; }
+    .demo-text { font-size: 16px; }
+    .bar-btn { width: 38px; }
+  }
+  @media (max-width: 360px) {
+    .bar-btn { width: 34px; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-bar-demo]').forEach((demo) => {
+    const bar = demo.querySelector<HTMLElement>('.bar')!;
+    const result = demo.querySelector<HTMLElement>('.bar-result')!;
+    const sel = demo.querySelector<HTMLElement>('[data-sel]')!;
+    const original = sel.textContent ?? '';
+    let caseStep = 0;
+    let timer: number | undefined;
+    const show = (text: string) => {
+      result.textContent = text;
+      result.hidden = false;
+      bar.classList.add('showing-result');
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        result.hidden = true;
+        bar.classList.remove('showing-result');
+      }, 1700);
+    };
+    const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+    demo.querySelectorAll<HTMLButtonElement>('.bar-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        switch (btn.dataset.act) {
+          case 'case': {
+            caseStep = (caseStep + 1) % 4;
+            sel.textContent = [original, original.toUpperCase(), titleCase(original), original.toLowerCase()][caseStep];
+            break;
+          }
+          case 'count': {
+            const words = (sel.textContent ?? '').trim().split(/\s+/).length;
+            show(`${words} words · ${(sel.textContent ?? '').length} characters`);
+            break;
+          }
+          case 'translate': show('petite barre flottante'); break;
+          case 'copy': show('✓ Copied'); break;
+          case 'paste': show('Pastes over the selection'); break;
+          case 'search': show('Opens a web search'); break;
+        }
+      });
+    });
+  });
+</script>

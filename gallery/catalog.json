@@ -1,0 +1,71 @@
+{
+  "categories": ["Text", "Writing", "Developer", "Web & search", "Everyday"],
+  "extensions": [
+    { "path": "slugify.txt", "category": "Text", "examples": [
+      { "action": "Slugify", "input": "Crème Brûlée & Friends' Café!", "output": "creme-brulee-and-friends-cafe" } ] },
+    { "path": "HeadlineCase.glintext", "category": "Text", "examples": [
+      { "action": "Headline Case", "input": "a walk through the woods with iPhone and NASA", "output": "A Walk through the Woods with iPhone and NASA" },
+      { "action": "Headline Case", "input": "a walk through the woods with iPhone and NASA", "options": { "style": "ap" }, "output": "A Walk Through the Woods With iPhone and NASA", "note": "AP / APA style" },
+      { "action": "Headline Case", "input": "a step-by-step guide to self-hosting", "output": "A Step-by-Step Guide to Self-Hosting", "hidden": true },
+      { "action": "Headline Case", "input": "the lord of the rings: the return of the king", "output": "The Lord of the Rings: The Return of the King", "hidden": true } ] },
+    { "path": "hard-wrap.txt", "category": "Text", "examples": [
+      { "action": "Hard Wrap", "input": "> Glint is a small, native macOS menu-bar app. Select text in any app and a floating bar of actions appears just above the selection.", "options": { "width": "72" }, "output": "> Glint is a small, native macOS menu-bar app. Select text in any app\n> and a floating bar of actions appears just above the selection.", "note": "72 columns" } ] },
+    { "path": "markdown-to-text.txt", "category": "Text", "examples": [
+      { "action": "Markdown to Plain Text", "input": "# Release notes\n\n- **Faster** startup, see [the docs](https://example.com)\n- Fixed `snake_case` names in _italic_ text", "output": "Release notes\n\n• Faster startup, see the docs\n• Fixed snake_case names in italic text" } ] },
+    { "path": "LineTools.glintext", "category": "Text", "examples": [
+      { "action": "Remove Duplicates", "input": "banana\napple\nbanana\ncherry\napple", "output": "banana\napple\ncherry" },
+      { "action": "Number Lines", "input": "Unzip\nMove to Applications\nOpen", "output": "1. Unzip\n2. Move to Applications\n3. Open" },
+      { "action": "Sort by Length", "input": "ccc\na\nbb\nd", "output": "a\nd\nbb\nccc", "hidden": true },
+      { "action": "Reverse Lines", "input": "one\ntwo\nthree", "output": "three\ntwo\none", "hidden": true },
+      { "action": "Remove Blank Lines", "input": "one\n\n  \ntwo", "output": "one\ntwo", "hidden": true },
+      { "action": "Shuffle Lines", "input": "1\n2\n3\n4\n5\n6", "permutation": true, "hidden": true } ] },
+    { "path": "rot13.txt", "category": "Text", "examples": [
+      { "action": "ROT13", "input": "Hello, World!", "output": "Uryyb, Jbeyq!" },
+      { "action": "ROT13", "input": "Uryyb, Jbeyq!", "output": "Hello, World!", "hidden": true } ] },
+
+    { "path": "word-frequency.txt", "category": "Writing", "examples": [
+      { "action": "Word Frequency", "input": "The cat saw the other cat. A dog saw the cat.", "output": "cat ×3 · saw ×2 · dog ×1 · other ×1" } ] },
+    { "path": "post-length.txt", "category": "Writing", "examples": [
+      { "action": "Post Length", "input": "Shipping Glint 1.1 today 🎉 https://saibarathr.github.io/glint/", "output": "51 / 280 · 229 left" },
+      { "action": "Post Length", "input": "Shipping Glint 1.1 today 🎉 https://saibarathr.github.io/glint/", "options": { "network": "mastodon" }, "output": "50 / 500 · 450 left", "hidden": true } ] },
+    { "path": "lorem-ipsum.txt", "category": "Writing", "examples": [
+      { "action": "Lorem Ipsum", "input": "2", "contains": "Lorem ipsum dolor sit amet, consectetur adipiscing elit", "paragraphs": 2, "displayOutput": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor…\n\n(and one more paragraph)" } ] },
+
+    { "path": "EpochConverter.glintext", "category": "Developer", "examples": [
+      { "action": "To Date", "input": "1700000000", "output": "2023-11-14T22:13:20Z" },
+      { "action": "To Timestamp", "input": "2023-11-14 22:13:20 +0100", "output": "1699996400" },
+      { "action": "To Date", "input": "1700000000123", "output": "2023-11-14T22:13:20.123Z", "hidden": true },
+      { "action": "To Timestamp", "input": "2023-11-14T22:13:20Z", "modifiers": ["option"], "output": "1700000000000", "hidden": true } ] },
+    { "path": "JSONToYAML.glintext", "category": "Developer", "examples": [
+      { "action": "JSON to YAML", "input": "{\"name\": \"Glint\", \"version\": \"1.10\", \"tags\": [\"mac\", \"text\"], \"window\": {\"on\": true}}", "output": "name: Glint\nversion: \"1.10\"\ntags:\n  - mac\n  - text\nwindow:\n  \"on\": true" },
+      { "action": "JSON to YAML", "input": "{\"items\":[{\"id\":1,\"ok\":null}],\"empty\":[],\"note\":\"a: b\"}", "output": "items:\n  - id: 1\n    ok: null\nempty: []\nnote: \"a: b\"", "hidden": true } ] },
+    { "path": "color-converter.txt", "category": "Developer", "examples": [
+      { "action": "To RGB", "input": "#ffbe36", "output": "rgb(255, 190, 54)" },
+      { "action": "To HSL", "input": "#ffbe36", "output": "hsl(41, 100%, 61%)" },
+      { "action": "To Hex", "input": "rgb(255, 190, 54)", "output": "#ffbe36", "hidden": true },
+      { "action": "To RGB", "input": "#ffbe3680", "output": "rgba(255, 190, 54, 0.5)", "hidden": true } ] },
+    { "path": "jwt-decode.txt", "category": "Developer", "examples": [
+      { "action": "JWT Decode", "input": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkFkYSIsImlhdCI6MTUxNjIzOTAyMn0.abc", "output": "{\"sub\":\"1234567890\",\"name\":\"Ada\",\"iat\":1516239022}  · HS256 · issued 2018-01-18T01:30:22Z", "display": "eyJhbGciOiJIUzI1NiIs…" } ] },
+    { "path": "toggle-comment.txt", "category": "Developer", "examples": [
+      { "action": "Toggle Comment", "input": "let answer = 42", "app": "com.microsoft.VSCode", "keys": ["command /"], "display": "Presses ⌘/ in VS Code, Xcode, Zed, Sublime Text, Nova and JetBrains IDEs" } ] },
+
+    { "path": "developer-docs.txt", "category": "Web & search", "examples": [
+      { "action": "MDN", "input": "Array.prototype.flatMap", "opens": "https://developer.mozilla.org/en-US/search?q=Array.prototype.flatMap" },
+      { "action": "npm", "input": "left pad", "opens": "https://www.npmjs.com/search?q=left%20pad", "hidden": true },
+      { "action": "crates.io", "input": "serde", "opens": "https://crates.io/search?q=serde", "hidden": true } ] },
+    { "path": "clean-url.txt", "category": "Web & search", "examples": [
+      { "action": "Clean URL", "input": "https://example.com/post?id=42&utm_source=news&utm_medium=email&fbclid=abc#top", "output": "https://example.com/post?id=42#top" },
+      { "action": "Clean URL", "input": "Read this: https://example.com/a?utm_campaign=x today", "output": "Read this: https://example.com/a today", "hidden": true } ] },
+
+    { "path": "unit-converter.txt", "category": "Everyday", "examples": [
+      { "action": "Unit Converter", "input": "12 km", "output": "12 km = 7.46 mi" },
+      { "action": "Unit Converter", "input": "72°F", "output": "72 °F = 22.22 °C" },
+      { "action": "Unit Converter", "input": "180 lbs", "output": "180 lb = 81.65 kg", "hidden": true },
+      { "action": "Unit Converter", "input": "100 km/h", "output": "100 km/h = 62.14 mph", "hidden": true } ] },
+    { "path": "find-in-page.txt", "category": "Everyday", "examples": [
+      { "action": "Find in Page", "input": "selection monitor", "keys": ["command f", "command a", "command v"], "copied": ["selection monitor", "clip"], "display": "Opens Find (⌘F) and pastes “selection monitor” into it" } ] },
+    { "path": "new-sticky.txt", "category": "Everyday", "examples": [
+      { "action": "New Sticky", "input": "Call the dentist", "service": "Make New Sticky Note", "display": "Runs the “Make New Sticky Note” service" } ] },
+    { "path": "mail-selection.txt", "category": "Everyday", "examples": [] }
+  ]
+}

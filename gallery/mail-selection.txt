@@ -1,0 +1,12 @@
+#glint
+name: Mail Selection
+identifier: io.github.saibarathr.glint.gallery.mail-selection
+description: Start a new message in Mail with the selection as its body. The first time, macOS asks whether Glint may control Mail.
+icon: symbol:envelope
+author: Glint gallery
+applescript: |
+  set theBody to "{glint text}"
+  tell application "Mail"
+    make new outgoing message with properties {content:theBody & return & return, visible:true}
+    activate
+  end tell

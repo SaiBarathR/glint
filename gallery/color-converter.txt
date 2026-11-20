@@ -1,0 +1,75 @@
+// #glint
+// name: Color Converter
+// identifier: io.github.saibarathr.glint.gallery.color-converter
+// description: Convert a selected CSS color between hex, rgb() and hsl(). Alpha is kept. Each action appears only for colors in another format.
+// icon: symbol:paintpalette
+// author: Glint gallery
+// language: javascript
+// module: true
+// after: paste-result
+var HEX = '^\\s*#([0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\\s*$';
+var RGB = '^\\s*rgba?\\(\\s*\\d{1,3}%?\\s*[,\\s]\\s*\\d{1,3}%?\\s*[,\\s]\\s*\\d{1,3}%?\\s*(?:[,/]\\s*[\\d.]+%?\\s*)?\\)\\s*$';
+var HSL = '^\\s*hsla?\\(\\s*[\\d.]+(?:deg)?\\s*[,\\s]\\s*[\\d.]+%\\s*[,\\s]\\s*[\\d.]+%\\s*(?:[,/]\\s*[\\d.]+%?\\s*)?\\)\\s*$';
+
+function round(x, digits) { var f = Math.pow(10, digits || 0); return Math.round(x * f) / f; }
+
+// Any supported color -> {r, g, b (0–255), a (0–1)}.
+function parse(text) {
+  var s = text.trim().toLowerCase(), m;
+  if ((m = s.match(/^#([0-9a-f]+)$/))) {
+    var h = m[1];
+    if (h.length <= 4) { h = h.split('').map(function (c) { return c + c; }).join(''); }
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16),
+             a: h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1 };
+  }
+  var nums = (s.match(/[\d.]+%?/g) || []).map(function (n) { return { v: parseFloat(n), pct: /%$/.test(n) }; });
+  var alpha = nums[3] ? (nums[3].pct ? nums[3].v / 100 : nums[3].v) : 1;
+  if (s.indexOf('rgb') === 0) {
+    var c = nums.slice(0, 3).map(function (n) { return Math.min(255, n.pct ? n.v * 2.55 : n.v); });
+    return { r: c[0], g: c[1], b: c[2], a: alpha };
+  }
+  // hsl -> rgb
+  var hue = nums[0].v % 360 / 360, sat = nums[1].v / 100, light = nums[2].v / 100;
+  function channel(t) {
+    t = (t + 1) % 1;
+    var q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat, p = 2 * light - q;
+    if (t < 1 / 6) { return p + (q - p) * 6 * t; }
+    if (t < 1 / 2) { return q; }
+    if (t < 2 / 3) { return p + (q - p) * (2 / 3 - t) * 6; }
+    return p;
+  }
+  return { r: channel(hue + 1 / 3) * 255, g: channel(hue) * 255, b: channel(hue - 1 / 3) * 255, a: alpha };
+}
+
+function toHex(c) {
+  var parts = [c.r, c.g, c.b].concat(c.a < 1 ? [c.a * 255] : []);
+  return '#' + parts.map(function (v) { return ('0' + Math.round(v).toString(16)).slice(-2); }).join('');
+}
+
+function toRgb(c) {
+  var rgb = [c.r, c.g, c.b].map(function (v) { return Math.round(v); }).join(', ');
+  return c.a < 1 ? 'rgba(' + rgb + ', ' + round(c.a, 2) + ')' : 'rgb(' + rgb + ')';
+}
+
+function toHsl(c) {
+  var r = c.r / 255, g = c.g / 255, b = c.b / 255;
+  var max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, h = 0, s = 0;
+  if (max !== min) {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  var hsl = Math.round(h) % 360 + ', ' + Math.round(s * 100) + '%, ' + Math.round(l * 100) + '%';
+  return c.a < 1 ? 'hsla(' + hsl + ', ' + round(c.a, 2) + ')' : 'hsl(' + hsl + ')';
+}
+
+function either(a, b) { return '(?:' + a + ')|(?:' + b + ')'; }
+
+module.exports = {
+  actions: [
+    { title: 'To RGB', icon: 'text:rgb', regex: either(HEX, HSL), code: function (input) { return toRgb(parse(input.text)); } },
+    { title: 'To HSL', icon: 'text:hsl', regex: either(HEX, RGB), code: function (input) { return toHsl(parse(input.text)); } },
+    { title: 'To Hex', icon: 'text:#', regex: either(RGB, HSL), code: function (input) { return toHex(parse(input.text)); } },
+  ],
+};

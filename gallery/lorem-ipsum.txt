@@ -1,0 +1,33 @@
+// #glint
+// name: Lorem Ipsum
+// identifier: io.github.saibarathr.glint.gallery.lorem-ipsum
+// description: Select a number from 1 to 20 and replace it with that many paragraphs of placeholder text. The first paragraph is always the classic one.
+// icon: symbol:text.alignleft
+// author: Glint gallery
+// regex: '^\s*([1-9]|1[0-9]|20)\s*$'
+// after: paste-result
+var classic = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et ' +
+  'dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea ' +
+  'commodo consequat.';
+var words = ('lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et ' +
+  'dolore magna aliqua enim ad minim veniam quis nostrud exercitation ullamco laboris nisi aliquip ex ea commodo ' +
+  'consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur excepteur sint ' +
+  'occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum').split(' ');
+// A small seeded generator, so the same number always gives the same text.
+var seed = 7;
+function next(n) { seed = (seed * 16807) % 2147483647; return seed % n; }
+function sentence() {
+  var length = 8 + next(9), out = [];
+  for (var i = 0; i < length; i++) { out.push(words[next(words.length)]); }
+  if (length > 10) { out[4 + next(4)] += ','; }
+  var s = out.join(' ');
+  return s.charAt(0).toUpperCase() + s.slice(1) + '.';
+}
+var count = Number(glint.input.regexResult[1] || glint.input.text.trim());
+var paragraphs = [classic];
+while (paragraphs.length < count) {
+  var sentences = [];
+  for (var j = 0, n = 3 + next(3); j < n; j++) { sentences.push(sentence()); }
+  paragraphs.push(sentences.join(' '));
+}
+return paragraphs.join('\n\n');

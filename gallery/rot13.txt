@@ -1,0 +1,8 @@
+# #glint
+# name: ROT13
+# identifier: io.github.saibarathr.glint.gallery.rot13
+# description: Encode or decode ROT13, the letter-rotating cipher used to hide spoilers and puzzle answers. Running it twice gives back the original.
+# icon: text:R13
+# author: Glint gallery
+# after: paste-result
+/usr/bin/tr 'A-Za-z' 'N-ZA-Mn-za-m'

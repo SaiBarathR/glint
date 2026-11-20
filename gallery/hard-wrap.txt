@@ -1,0 +1,46 @@
+#glint
+name: Hard Wrap
+identifier: io.github.saibarathr.glint.gallery.hard-wrap
+description: Re-wrap paragraphs at 72, 80 or 100 columns. Blank lines, indentation, "> " quotes, "// " and "# " comments and list bullets are kept.
+icon: symbol:text.append
+author: Glint gallery
+after: paste-result
+trim: false
+options:
+  - identifier: width
+    label: Wrap at
+    type: multiple
+    values: ['72', '80', '100']
+    value labels: [72 columns, 80 columns, 100 columns]
+    default value: '80'
+javascript: |
+  var width = Number(glint.options.width) || 80;
+  var parts = glint.input.text.replace(/\r\n/g, '\n').match(/^([\s\S]*?)(\s*)$/);
+  var prefixPattern = /^([ \t]*(?:(?:>|\/\/|#|;)[ \t]?)*)((?:[-*+•]|\d+[.)])[ \t]+)?/;
+  var paragraphs = parts[1].split(/\n[ \t]*\n/);
+  var wrapped = paragraphs.map(function (paragraph) {
+    var lines = paragraph.split('\n');
+    var m = lines[0].match(prefixPattern);
+    var quote = m[1], bullet = m[2] || '';
+    var first = quote + bullet;
+    var rest = quote + bullet.replace(/\S/g, ' ');
+    var body = lines.map(function (line, i) {
+      if (i === 0) { return line.slice(first.length); }
+      return quote.trim() ? line.replace(/^[ \t]*(?:(?:>|\/\/|#|;)[ \t]?)*/, '') : line.replace(/^\s+/, '');
+    }).join(' ');
+    var words = body.split(/\s+/).filter(Boolean);
+    if (words.length === 0) { return lines.join('\n'); }
+    var out = [], line = '';
+    words.forEach(function (word) {
+      var prefix = out.length ? rest : first;
+      if (line && (prefix + line + ' ' + word).length > width) {
+        out.push(prefix + line);
+        line = word;
+      } else {
+        line = line ? line + ' ' + word : word;
+      }
+    });
+    out.push((out.length ? rest : first) + line);
+    return out.join('\n');
+  });
+  return wrapped.join('\n\n') + parts[2];

@@ -1,0 +1,24 @@
+// #glint
+// name: JWT Decode
+// identifier: io.github.saibarathr.glint.gallery.jwt-decode
+// description: Decode a selected JSON Web Token and show its payload, with the expiry time in UTC. The signature is not checked. Click the result to copy it.
+// icon: symbol:key
+// author: Glint gallery
+// regex: '(eyJ[A-Za-z0-9_-]+)\.(eyJ[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]*)'
+// after: preview-result
+function part(segment, label) {
+  var json = util.base64Decode(segment);
+  try { return JSON.parse(json); } catch (e) { throw new Error('The ' + label + ' is not valid JSON'); }
+}
+function utc(seconds) { return new Date(seconds * 1000).toISOString().replace('.000Z', 'Z'); }
+var groups = glint.input.regexResult;
+var header = part(groups[1], 'header');
+var payload = part(groups[2], 'payload');
+var notes = [];
+if (header.alg) { notes.push(header.alg); }
+if (typeof payload.exp === 'number') {
+  notes.push((payload.exp * 1000 < Date.now() ? 'expired ' : 'expires ') + utc(payload.exp));
+} else if (typeof payload.iat === 'number') {
+  notes.push('issued ' + utc(payload.iat));
+}
+return JSON.stringify(payload) + (notes.length ? '  · ' + notes.join(' · ') : '');

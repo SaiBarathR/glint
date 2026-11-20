@@ -184,8 +184,6 @@ When an action dictionary holds several of these keys, the first one in this ord
 | `applescript` (`apple script`) | Run inline AppleScript (placeholders are filled in). |
 | `applescript file` (`apple script file`) | Run an AppleScript file (`.applescript` or compiled `.scpt`) from the bundle. Placeholders are **not** filled in files. |
 
-AppleScript runs in a separate `osascript` process with a 120-second timeout, so dialogs, `delay` and
-first-run Automation prompts never block Glint. The result is the script's return value as text.
 | `javascript` (`java script`) | Run inline JavaScript. |
 | `javascript file` (`java script file`) | Run a JavaScript file from the bundle. A file that assigns `exports` is a one-action module. |
 | `key combos` | Press several key combos in sequence (50 ms apart). |
@@ -195,6 +193,12 @@ first-run Automation prompts never block Glint. The result is the script's retur
 | `language` + code | Inverted snippets only: the code body, run in that language. |
 
 Plus JavaScript **module actions** defined in code (`exports.actions`). See below.
+
+AppleScript runs in a separate `osascript` process with a 120-second timeout, so dialogs, `delay` and
+first-run Automation prompts never block Glint. The result is the script's return value as text.
+
+Every kind runs under limits (timeouts, output size, sandboxed JavaScript). They are listed in one place on the
+website's [Safety and limits](https://saibarathr.github.io/glint/docs/safety-and-limits/) page.
 
 ### Key combos
 

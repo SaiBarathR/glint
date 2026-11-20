@@ -1,0 +1,28 @@
+---
+import type { WebIcon } from '../lib/icons';
+interface Props { icon: WebIcon; size?: 'sm' | 'md' | 'lg'; }
+const { icon, size = 'md' } = Astro.props;
+---
+{icon.kind === 'svg'
+  ? <span class={`ext-icon ext-icon-${size}`} aria-hidden="true" set:html={icon.svg} />
+  : <span class={`ext-icon ext-icon-${size} ext-icon-text`} aria-hidden="true" data-len={Math.min([...icon.text].length, 4)}>{icon.text}</span>}
+
+<style>
+  .ext-icon {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 11px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .ext-icon :global(svg) { width: 20px; height: 20px; display: block; }
+  .ext-icon-sm { width: 28px; height: 28px; border-radius: 8px; }
+  .ext-icon-sm :global(svg) { width: 15px; height: 15px; }
+  .ext-icon-lg { width: 48px; height: 48px; border-radius: 13px; }
+  .ext-icon-lg :global(svg) { width: 24px; height: 24px; }
+  .ext-icon-text { font: 700 14px/1 var(--font); letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; }
+  .ext-icon-text[data-len="3"] { font-size: 12px; }
+  .ext-icon-text[data-len="4"] { font-size: 10.5px; }
+  .ext-icon-sm.ext-icon-text { font-size: 11px; }
+  .ext-icon-sm.ext-icon-text[data-len="3"] { font-size: 9.5px; }
+  .ext-icon-sm.ext-icon-text[data-len="4"] { font-size: 8.5px; }
+</style>

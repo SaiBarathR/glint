@@ -3,9 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore: ["site/**", "gallery/**"]
   pull_request:
-    paths-ignore: ["site/**"]
 
 permissions:
   contents: read

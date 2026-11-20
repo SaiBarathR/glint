@@ -1,0 +1,35 @@
+// #glint
+// name: Unit Converter
+// identifier: io.github.saibarathr.glint.gallery.unit-converter
+// description: Convert a selected measurement between metric and US units, such as 12 km, 70 kg, 72°F, 2 l or 100 km/h. Click the result to copy it.
+// icon: symbol:ruler
+// author: Glint gallery
+// regex: '(?i)^\s*-?\d[\d,]*(\.\d+)?\s*(km/h|kph|mph|km|kilometers?|kilometres?|mi|miles?|m|meters?|metres?|ft|feet|foot|cm|mm|in|inch|inches|kg|kilograms?|lbs?|pounds?|g|grams?|oz|ounces?|°\s?[cf]|deg\s?[cf]|celsius|fahrenheit|l|liters?|litres?|gal|gallons?|ml|fl\.?\s?oz)\.?\s*$'
+// after: preview-result
+var units = {
+  km: [0.621371, 'mi'], mi: [1.609344, 'km'], m: [3.28084, 'ft'], ft: [0.3048, 'm'],
+  cm: [0.393701, 'in'], mm: [0.0393701, 'in'], in: [2.54, 'cm'],
+  kg: [2.20462, 'lb'], lb: [0.453592, 'kg'], g: [0.035274, 'oz'], oz: [28.3495, 'g'],
+  l: [0.264172, 'gal'], gal: [3.78541, 'l'], ml: [0.033814, 'fl oz'], floz: [29.5735, 'ml'],
+  kmh: [0.621371, 'mph'], mph: [1.609344, 'km/h']
+};
+var aliases = {
+  kph: 'kmh', 'km/h': 'kmh', kilometer: 'km', kilometers: 'km', kilometre: 'km', kilometres: 'km', mile: 'mi',
+  miles: 'mi', meter: 'm', meters: 'm', metre: 'm', metres: 'm', feet: 'ft', foot: 'ft', inch: 'in', inches: 'in',
+  kilogram: 'kg', kilograms: 'kg', lbs: 'lb', pound: 'lb', pounds: 'lb', gram: 'g', grams: 'g', ounce: 'oz',
+  ounces: 'oz', liter: 'l', liters: 'l', litre: 'l', litres: 'l', gallon: 'gal', gallons: 'gal'
+};
+function format(x) {
+  var digits = Math.abs(x) >= 100 ? 1 : 2;
+  return String(Number(x.toFixed(digits)));
+}
+var m = glint.input.text.trim().match(/^(-?\d[\d,]*(?:\.\d+)?)\s*(.+?)\.?$/);
+var number = Number(m[1].replace(/,/g, ''));
+var unit = m[2].toLowerCase().replace(/\s+/g, '').replace(/^(°|deg)/, '').replace('fl.oz', 'floz');
+unit = aliases[unit] || unit;
+if (unit === 'c' || unit === 'celsius') { return format(number) + ' °C = ' + format(number * 9 / 5 + 32) + ' °F'; }
+if (unit === 'f' || unit === 'fahrenheit') { return format(number) + ' °F = ' + format((number - 32) * 5 / 9) + ' °C'; }
+var conversion = units[unit];
+if (!conversion) { throw new Error('Unknown unit: ' + m[2]); }
+var shown = { kmh: 'km/h', floz: 'fl oz' }[unit] || unit;
+return format(number) + ' ' + shown + ' = ' + format(number * conversion[0]) + ' ' + conversion[1];

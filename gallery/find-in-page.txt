@@ -1,0 +1,14 @@
+// #glint
+// name: Find in Page
+// identifier: io.github.saibarathr.glint.gallery.find-in-page
+// description: Open the app's Find bar with the selection already typed in, so ⌘G jumps to the next match. Your clipboard is put back afterwards.
+// icon: symbol:doc.text.magnifyingglass
+// author: Glint gallery
+var previous = pasteboard.text;
+glint.copyText(glint.input.text);
+glint.pressKey('command f');
+await sleep(250);        // give the Find bar time to open
+glint.pressKey('command a');
+glint.pressKey('command v');
+await sleep(250);
+if (previous) { pasteboard.text = previous; }

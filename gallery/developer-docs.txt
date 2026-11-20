@@ -1,0 +1,23 @@
+#glint
+name: Developer Docs
+identifier: io.github.saibarathr.glint.gallery.developer-docs
+description: Look up the selection on MDN, DevDocs, npm, crates.io or PyPI. Hold ⌘ to open the page in the background.
+icon: symbol:book.closed
+author: Glint gallery
+requirements: [text, '!url']
+actions:
+  - title: MDN
+    icon: text:MDN
+    url: https://developer.mozilla.org/en-US/search?q=***
+  - title: DevDocs
+    icon: text:DD
+    url: https://devdocs.io/#q=***
+  - title: npm
+    icon: text:npm
+    url: https://www.npmjs.com/search?q=***
+  - title: crates.io
+    icon: text:rs
+    url: https://crates.io/search?q=***
+  - title: PyPI
+    icon: text:py
+    url: https://pypi.org/search/?q=***

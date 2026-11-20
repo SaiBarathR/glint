@@ -1,0 +1,26 @@
+// #glint
+// name: Clean URL
+// identifier: io.github.saibarathr.glint.gallery.clean-url
+// description: Remove tracking parameters (utm_*, fbclid, gclid, mc_eid and about thirty others) from the link in the selection. Everything else in the selection stays as it is.
+// icon: symbol:wand.and.stars
+// author: Glint gallery
+// requirements: [url]
+// after: paste-result
+var tracking = /^(utm_[a-z0-9_]+|mtm_[a-z0-9_]+|pk_(campaign|kwd|source|medium|content)|fbclid|gclid|gclsrc|dclid|gbraid|wbraid|msclkid|yclid|twclid|ttclid|li_fat_id|mc_cid|mc_eid|igshid|igsh|si|_hsenc|_hsmi|__hssc|__hstc|__hsfp|hsctatracking|mkt_tok|vero_id|vero_conv|oly_anon_id|oly_enc_id|rb_clickid|s_cid|ref_src|ref_url|_ga|_gl|wt_mc|spm|scm|ICID|cmpid)$/i;
+var url = glint.input.text;
+var hashAt = url.indexOf('#');
+var hash = hashAt >= 0 ? url.slice(hashAt) : '';
+var beforeHash = hashAt >= 0 ? url.slice(0, hashAt) : url;
+var queryAt = beforeHash.indexOf('?');
+var clean = url;
+if (queryAt >= 0) {
+  var kept = beforeHash.slice(queryAt + 1).split('&').filter(function (pair) {
+    var name = pair.split('=')[0];
+    try { name = decodeURIComponent(name); } catch (e) { /* keep the raw name */ }
+    return pair !== '' && !tracking.test(name);
+  });
+  clean = beforeHash.slice(0, queryAt) + (kept.length ? '?' + kept.join('&') : '') + hash;
+}
+// Keep the words around the link; only the link changes.
+var full = glint.input.fullText;
+return full.indexOf(url) >= 0 ? full.split(url).join(clean) : clean;
