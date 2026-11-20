@@ -47,7 +47,12 @@ public enum ContentDetector {
             } else if url.scheme == "file" {
                 // File URLs are reported as paths below.
             } else {
-                let s = url.absoluteString
+                var s = url.absoluteString
+                // A bare domain ("github.com/foo") is detected as http:// on some macOS versions: prefer https.
+                let matched = ns.substring(with: match.range)
+                if url.scheme == "http", !matched.lowercased().hasPrefix("http") {
+                    s = "https://" + s.dropFirst("http://".count)
+                }
                 if seen.insert(s).inserted { result.urls.append(s) }
             }
         }
