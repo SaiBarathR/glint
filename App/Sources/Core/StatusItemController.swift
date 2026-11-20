@@ -45,6 +45,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        if let release = UpdateChecker.shared.availableRelease {
+            let update = NSMenuItem(title: "Update Available: Glint \(release.tagName.drop(while: { $0 == "v" }))…",
+                                    action: #selector(openUpdate), keyEquivalent: "")
+            update.target = self
+            update.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            menu.addItem(update)
+            menu.addItem(.separator())
+        }
         let toggle = NSMenuItem(title: prefs.enabled ? "Pause Glint" : "Resume Glint", action: #selector(toggleEnabled),
                                 keyEquivalent: "")
         toggle.target = self
@@ -77,6 +85,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         add(menu, "Extensions…", #selector(openExtensions), "")
         add(menu, "Extension Log", #selector(showLog), "")
         menu.addItem(.separator())
+        add(menu, "Check for Updates…", #selector(checkForUpdates), "")
         add(menu, "About Glint", #selector(openAbout), "")
         add(menu, "Quit Glint", #selector(quit), "q")
     }
@@ -103,4 +112,29 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func openAbout() { SettingsWindowController.shared.show(pane: .about) }
     @objc private func showLog() { onShowLog?() }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func openUpdate() { UpdateChecker.shared.openRelease() }
+    @objc private func checkForUpdates() {
+        Task { @MainActor in
+            let checker = UpdateChecker.shared
+            await checker.check(manual: true)
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            switch checker.state {
+            case .available(let release):
+                alert.messageText = "Glint \(release.tagName.drop(while: { $0 == "v" })) is available"
+                alert.informativeText = "You have \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"). After updating, re-enable Glint in System Settings → Privacy & Security → Accessibility."
+                alert.addButton(withTitle: "Download")
+                alert.addButton(withTitle: "Later")
+                if alert.runModal() == .alertFirstButtonReturn { checker.openRelease(release) }
+            case .current:
+                alert.messageText = "Glint is up to date"
+                alert.runModal()
+            case .failed(let message):
+                alert.messageText = message
+                alert.informativeText = "Check your connection, or see the releases page on GitHub."
+                alert.runModal()
+            default: break
+            }
+        }
+    }
 }

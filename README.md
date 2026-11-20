@@ -10,6 +10,34 @@ change its case, format it as JSON, send it to Reminders, and more. You can add 
 - Extensions are plain folders or text snippets. Select a snippet anywhere and click **Install Extension**.
 - Loads PopClip-format snippets and extensions too, so existing ones keep working (see [Compatibility](#compatibility)).
 
+**Website:** [saibarathr.github.io/glint](https://saibarathr.github.io/glint/): download, install steps, demo,
+[extension gallery](https://saibarathr.github.io/glint/extensions/) and the [docs](https://saibarathr.github.io/glint/docs/).
+
+<!-- promo-video -->
+
+![The action bar over a selection, with icons for search, cut, copy, paste and more](docs/images/bar-light.png)
+
+## Install a release
+
+Download the latest `Glint-<version>-macos-universal.zip` and `SHA256SUMS.txt` from
+[Releases](https://github.com/SaiBarathR/glint/releases), then check the archive:
+
+```bash
+shasum -a 256 -c SHA256SUMS.txt
+```
+
+Unzip it and move `Glint.app` to Applications. The app is ad-hoc signed rather than notarized, so
+Gatekeeper blocks the first launch: open it once, dismiss the warning, then go to **System Settings →
+Privacy & Security** and click **Open Anyway** next to the message about Glint. On macOS 14 you can
+instead Control-click the app and choose **Open**.
+
+Glint then asks for **Accessibility** access, which it needs to read the selection and paste results
+(see [Granting Accessibility access](#granting-accessibility-access)). The app is universal
+(`arm64` + `x86_64`) and needs macOS 14 or newer.
+
+Glint checks GitHub for a newer release once a day and shows **Update Available** in its menu bar
+menu. Turn this off in Settings → General.
+
 ## Features
 
 ### Built-in actions
@@ -117,31 +145,29 @@ Installed extensions live in `~/Library/Application Support/Glint/Extensions`.
 The full reference, covering every key, action kind, placeholder, environment variable, JavaScript API
 call and requirement, is in **[docs/EXTENSIONS.md](docs/EXTENSIONS.md)**.
 
-## Install and build
+## Build from source
 
-Glint is built from source with Xcode 15 or later.
+Needs Xcode (15 or later) and [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
-```sh
-brew install xcodegen          # generates Glint.xcodeproj from project.yml
-xcodegen generate
-xcodebuild -project Glint.xcodeproj -scheme Glint -configuration Release \
-           -derivedDataPath build build
-open build/Build/Products/Release/Glint.app
+```bash
+brew install xcodegen
+./scripts/build-app.sh --install
 ```
 
-`scripts/build.sh` wraps these steps (generate, build, copy `Glint.app` to `build/`). It's maintained
-by the project lead. To build with your own signing identity, change `DEVELOPMENT_TEAM` /
-`CODE_SIGN_IDENTITY` in `project.yml`.
+That builds `dist/Glint.app` as a universal binary, ad-hoc signs it, and copies it to `/Applications`.
+Leave off `--install` to just build into `dist/`, add `--native` to skip the second architecture while
+iterating, or `--dev-sign` to sign with the Apple Development identity in `project.yml` so macOS keeps
+the Accessibility permission across rebuilds.
 
-Run the engine's unit tests, which also load and exercise every bundled extension:
+Run the engine's unit tests, which also load and exercise every bundled and gallery extension:
 
-```sh
-cd Packages/GlintCore && swift test
+```bash
+swift test --package-path Packages/GlintCore
 ```
 
 Regenerate the app icon (drawn in code with CoreGraphics):
 
-```sh
+```bash
 swift scripts/make-icon.swift
 ```
 
@@ -151,7 +177,9 @@ Glint reads the selection and pastes results through the macOS Accessibility API
 
 1. Launch Glint. The onboarding window links straight to the right settings pane.
 2. Open **System Settings → Privacy & Security → Accessibility** and switch **Glint** on.
-3. If you rebuild or move the app and the switch stops working, remove Glint from the list with **–** and add it again.
+3. **After updating** (or rebuilding or moving the app), macOS no longer recognises the new copy, because
+   the permission is tied to the app's signature. Switch Glint off and on again; if the bar still doesn't
+   appear, remove Glint from the list with **–** and add it again.
 
 AppleScript extensions that control other apps (Reminders, Notes…) ask for **Automation** permission
 the first time they run.
@@ -162,9 +190,14 @@ the first time they run.
 App/                      the macOS app (AppKit + SwiftUI settings)
   Resources/Extensions/   bundled extensions
 Packages/GlintCore/       extension engine: config parsing, requirements, script/JS runners (with tests)
-scripts/                  build and icon scripts
-docs/EXTENSIONS.md        extension authoring reference
+gallery/                  extra extensions offered on the website
+site/                     the website (GitHub Pages)
+scripts/                  build, release-check and icon scripts
+docs/                     EXTENSIONS.md (extension reference), architecture, releasing, release notes
 ```
+
+More: [docs/architecture.md](docs/architecture.md) · [docs/releasing.md](docs/releasing.md) ·
+[CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md)
 
 ## Compatibility
 

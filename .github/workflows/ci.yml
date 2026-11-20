@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["site/**", "gallery/**"]
+  pull_request:
+    paths-ignore: ["site/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-verify:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      # The default toolchain on the runner image can lag behind what the project needs.
+      - name: Select the newest installed Xcode
+        run: |
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null \
+            | sed 's|.*/Xcode_||; s|\.app$||' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${newest}.app"
+          fi
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test the extension engine
+        run: swift test --package-path Packages/GlintCore
+
+      - name: Build the universal app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Verify architectures, icon, and ad-hoc signature
+        run: |
+          executable="dist/Glint.app/Contents/MacOS/Glint"
+          test "$(lipo -archs "$executable" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')" = "arm64 x86_64"
+          test -s "dist/Glint.app/Contents/Resources/AppIcon.icns" || test -s "dist/Glint.app/Contents/Resources/Assets.car"
+          codesign --verify --deep --strict --verbose=2 "dist/Glint.app"
+          test "$(codesign --display --verbose=2 "dist/Glint.app" 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"
+
+      - name: Render the UI headlessly
+        run: |
+          ./dist/Glint.app/Contents/MacOS/Glint --render-bar /tmp/bar
+          ./dist/Glint.app/Contents/MacOS/Glint --render-settings /tmp/settings
+          test -s /tmp/bar/bar-dark-medium-iconsOnly.png
+          test -s /tmp/settings/general-light.png
+          test -s /tmp/settings/onboarding-dark.png
+
+      - name: Check the out-of-process config reader
+        run: |
+          out="$(printf 'name: CI\nurl: https://example.com/?q=***\n' | ./dist/Glint.app/Contents/MacOS/Glint --parse-yaml)"
+          echo "$out"
+          echo "$out" | grep -q '"name":"CI"'
+          bad="$(printf 'name: X\n[a]: b\n' | ./dist/Glint.app/Contents/MacOS/Glint --parse-yaml)"
+          echo "$bad" | grep -q '"error"'
+
+      - name: Validate the release version and notes
+        run: ./scripts/validate-release.sh "v$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([^"]+)"?$/\1/p' project.yml | head -1)"

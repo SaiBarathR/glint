@@ -39,12 +39,16 @@ struct AboutPane: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 520)
 
-                Button {
-                    NSWorkspace.shared.open(Self.repositoryURL)
-                } label: {
-                    Label("View on GitHub", systemImage: "arrow.up.right.square")
+                HStack(spacing: 10) {
+                    Button {
+                        NSWorkspace.shared.open(Self.repositoryURL)
+                    } label: {
+                        Label("View on GitHub", systemImage: "arrow.up.right.square")
+                    }
+                    UpdateButton()
                 }
                 .controlSize(.large)
+                UpdateStatusText()
 
                 extensionsCard
                     .frame(maxWidth: 540)
@@ -102,5 +106,44 @@ struct AboutPane: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
         )
+    }
+}
+
+
+/// "Check for Updates" / "Download vX" button driven by `UpdateChecker`.
+struct UpdateButton: View {
+    @ObservedObject private var checker = UpdateChecker.shared
+    var body: some View {
+        if let release = checker.availableRelease {
+            Button {
+                checker.openRelease(release)
+            } label: {
+                Label("Download \(release.tagName)", systemImage: "arrow.down.circle")
+            }
+        } else {
+            Button {
+                Task { await checker.check(manual: true) }
+            } label: {
+                Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(checker.state == .checking)
+        }
+    }
+}
+
+struct UpdateStatusText: View {
+    @ObservedObject private var checker = UpdateChecker.shared
+    var body: some View {
+        Group {
+            switch checker.state {
+            case .checking: Text("Checking for updates…")
+            case .current: Text("Glint is up to date.")
+            case .available(let release): Text("Glint \(release.tagName.drop(while: { $0 == "v" })) is available.")
+            case .failed(let message): Text(message)
+            case .idle: EmptyView()
+            }
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
     }
 }

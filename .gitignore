@@ -6,3 +6,7 @@ DerivedData/
 xcuserdata/
 .swiftpm/
 dist/
+promo/
+site/node_modules/
+site/dist/
+site/.astro/

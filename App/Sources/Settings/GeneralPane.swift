@@ -25,6 +25,10 @@ struct GeneralPane: View {
                     Text("Show menu bar icon")
                     Text("When the icon is hidden, open Glint again to bring up Settings.")
                 }
+                Toggle(isOn: $prefs.automaticallyChecksForUpdates) {
+                    Text("Check for updates automatically")
+                    Text("Once a day, Glint asks GitHub for the latest release. Nothing else is sent.")
+                }
             }
 
             Section("Permissions") {

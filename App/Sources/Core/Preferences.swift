@@ -4,7 +4,7 @@ import GlintCore
 import ServiceManagement
 
 /// All user settings, persisted in UserDefaults. Observe with SwiftUI (`@ObservedObject`) or Combine.
-final class Preferences: ObservableObject {
+final class Preferences: ObservableObject, UpdateSettings {
     static let shared = Preferences()
     private let d = UserDefaults.standard
 
@@ -96,6 +96,25 @@ final class Preferences: ObservableObject {
     @Published var maxTextLength: Int { didSet { d.set(maxTextLength, forKey: "maxTextLength") } }
     @Published var hasCompletedOnboarding: Bool { didSet { d.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
 
+    // MARK: Updates
+    @Published var automaticallyChecksForUpdates: Bool { didSet { d.set(automaticallyChecksForUpdates, forKey: "automaticallyChecksForUpdates") } }
+    var lastUpdateCheckAt: Date? {
+        get { d.object(forKey: "lastUpdateCheckAt") as? Date }
+        set { d.set(newValue, forKey: "lastUpdateCheckAt") }
+    }
+    var cachedUpdateTag: String? {
+        get { d.string(forKey: "cachedUpdateTag") }
+        set { d.set(newValue, forKey: "cachedUpdateTag") }
+    }
+    var cachedUpdateURLString: String? {
+        get { d.string(forKey: "cachedUpdateURLString") }
+        set { d.set(newValue, forKey: "cachedUpdateURLString") }
+    }
+    var dismissedReleaseTag: String? {
+        get { d.string(forKey: "dismissedReleaseTag") }
+        set { d.set(newValue, forKey: "dismissedReleaseTag") }
+    }
+
     static let defaultExcludedApps = [
         "com.1password.1password", "com.agilebits.onepassword7", "com.apple.keychainaccess", "com.bitwarden.desktop",
         "com.apple.loginwindow", "com.apple.ScreenSharing",
@@ -113,7 +132,7 @@ final class Preferences: ObservableObject {
             "searchEngineID": "google", "customSearchTemplate": "", "speechVoiceID": "", "speechRate": 0.5,
             "excludedApps": Preferences.defaultExcludedApps,
             "useCopyFallback": true, "restoreClipboardAfterPaste": true, "maxTextLength": 100_000,
-            "hasCompletedOnboarding": false,
+            "hasCompletedOnboarding": false, "automaticallyChecksForUpdates": true,
         ])
         enabled = d.bool(forKey: "enabled")
         showMenuBarIcon = d.bool(forKey: "showMenuBarIcon")
@@ -144,6 +163,7 @@ final class Preferences: ObservableObject {
         restoreClipboardAfterPaste = d.bool(forKey: "restoreClipboardAfterPaste")
         maxTextLength = d.integer(forKey: "maxTextLength")
         hasCompletedOnboarding = d.bool(forKey: "hasCompletedOnboarding")
+        automaticallyChecksForUpdates = d.bool(forKey: "automaticallyChecksForUpdates")
         showBarHotKey = Preferences.loadCodable("showBarHotKey")
         actionHotKeys = Preferences.loadCodable("actionHotKeys") ?? [:]
     }

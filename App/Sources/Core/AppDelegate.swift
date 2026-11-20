@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
     private var pendingCapture: Task<Void, Never>?
     private var lastShownText: String?
     private var lastShownAt = Date.distantPast
+    private var updateTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let dir = argumentValue("--render-settings") {
@@ -42,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SelectionMonitorDelega
         statusItem.onShowLog = { LogWindow.shared.show() }
         trackFrontmostApp()
         observeHotKeys()
+        // Daily update check (the checker itself skips if it ran within 24 h or is turned off).
+        Task { @MainActor in await UpdateChecker.shared.checkIfNeeded() }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { _ in
+            Task { @MainActor in await UpdateChecker.shared.checkIfNeeded() }
+        }
 
         if !Permissions.isAccessibilityTrusted || !prefs.hasCompletedOnboarding {
             OnboardingWindowController.shared.show()

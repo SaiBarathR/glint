@@ -1,0 +1,166 @@
+name: Release macOS app
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Intended release tag (for example v1.1.0)
+        required: true
+        type: string
+      ref:
+        description: Exact branch, tag, or commit SHA to package without publishing
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-package:
+    runs-on: macos-15
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      archive_name: ${{ steps.package.outputs.archive_name }}
+      notes_path: ${{ steps.validate.outputs.notes_path }}
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_TAG: ${{ github.ref_name }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REQUESTED_REF: ${{ inputs.ref }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "tag=$PUSH_TAG" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=$PUSH_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$REQUESTED_TAG" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=$REQUESTED_REF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the exact tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.checkout_ref }}
+
+      - name: Select the newest installed Xcode
+        run: |
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null \
+            | sed 's|.*/Xcode_||; s|\.app$||' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${newest}.app"
+          fi
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Validate tag, app version, and release notes
+        id: validate
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          version="$(./scripts/validate-release.sh "$TAG")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "notes_path=docs/releases/$TAG.md" >> "$GITHUB_OUTPUT"
+
+      - name: Test the extension engine
+        run: swift test --package-path Packages/GlintCore
+
+      - name: Build universal app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Verify app before archiving
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          app="dist/Glint.app"
+          test "$(lipo -archs "$app/Contents/MacOS/Glint" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')" = "arm64 x86_64"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          test "$(codesign --display --verbose=2 "$app" 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"
+
+      - name: Archive and generate checksum
+        id: package
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          archive_name="Glint-${VERSION}-macos-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent "dist/Glint.app" "dist/$archive_name"
+          (cd dist && shasum -a 256 "$archive_name" > SHA256SUMS.txt)
+          echo "archive_name=$archive_name" >> "$GITHUB_OUTPUT"
+
+      - name: Verify final archive in a clean directory
+        env:
+          ARCHIVE_NAME: ${{ steps.package.outputs.archive_name }}
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          (cd dist && shasum -a 256 -c SHA256SUMS.txt)
+          extracted="$(mktemp -d)"
+          trap 'rm -rf "$extracted"' EXIT
+          ditto -x -k "dist/$ARCHIVE_NAME" "$extracted"
+          app="$extracted/Glint.app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION"
+          test "$(lipo -archs "$app/Contents/MacOS/Glint" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')" = "arm64 x86_64"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      - name: Upload verified assets for dry runs and publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: glint-${{ steps.validate.outputs.version }}-release-assets
+          path: |
+            dist/${{ steps.package.outputs.archive_name }}
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: validate-and-package
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out release notes from exact tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Download verified assets
+        uses: actions/download-artifact@v4
+        with:
+          name: glint-${{ needs.validate-and-package.outputs.version }}-release-assets
+          path: dist
+
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+
+      - name: Publish verified GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          ARCHIVE_NAME: ${{ needs.validate-and-package.outputs.archive_name }}
+          NOTES_PATH: ${{ needs.validate-and-package.outputs.notes_path }}
+        run: |
+          gh release create "$TAG" \
+            "dist/$ARCHIVE_NAME" \
+            dist/SHA256SUMS.txt \
+            --verify-tag \
+            --title "Glint ${TAG#v}" \
+            --notes-file "$NOTES_PATH"
