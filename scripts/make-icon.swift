@@ -6,8 +6,8 @@
 // Default output: App/Resources/Assets.xcassets/AppIcon.appiconset (relative to the repo root).
 // The artwork is vector, so each PNG is rendered at its own pixel size rather than downscaled.
 //
-// Motif: a line of text with a highlighted selection and a dark floating action bar (three dots)
-// above it, on an indigo-to-violet macOS-style rounded square.
+// Motif: a light floating action bar (three buttons, one lit amber) pointing at an amber text selection,
+// on a solid charcoal macOS-style rounded square. Solid colours only; it matches the website mark.
 
 import AppKit
 import Foundation
@@ -51,11 +51,17 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
             blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
 }
 
-func linearGradient(_ colors: [CGColor], _ locations: [CGFloat]) -> CGGradient {
-    CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: colors as CFArray, locations: locations)!
-}
-
 // MARK: - Artwork (drawn in a 1024×1024 coordinate space, y up)
+//
+// The shapes mirror the website mark (site/public/favicon.svg), which is laid out on a 32×32 grid with y
+// pointing down. `grid` maps a rectangle on that grid onto the 824pt icon body. Every fill is a solid colour:
+// no gradients, no shadows, no purple.
+
+let charcoal: UInt32 = 0x1C1C1E
+let paper: UInt32 = 0xFAFAF9
+let amber: UInt32 = 0xFFBE36
+let amberDeep: UInt32 = 0xC8861D
+let stone: UInt32 = 0x57534E
 
 func drawIcon(in ctx: CGContext, pixelSize: Int) {
     let small = pixelSize <= 32 // simplify details that turn to mush at tiny sizes
@@ -63,128 +69,59 @@ func drawIcon(in ctx: CGContext, pixelSize: Int) {
     ctx.setShouldAntialias(true)
     ctx.interpolationQuality = .high
 
-    // Apple's grid: an 824×824 shape centred in the 1024 canvas, nudged up a little to leave room for the shadow.
-    let body = CGRect(x: 100, y: 112, width: 824, height: 824)
+    // Apple's grid: an 824×824 shape centred in the 1024 canvas.
+    let body = CGRect(x: 100, y: 100, width: 824, height: 824)
+    let unit = body.width / 32
+    func grid(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
+        CGRect(x: body.minX + x * unit, y: body.maxY - (y + h) * unit, width: w * unit, height: h * unit)
+    }
+    func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: body.minX + x * unit, y: body.maxY - y * unit) }
+    func fill(_ path: CGPath, _ hex: UInt32) {
+        ctx.addPath(path)
+        ctx.setFillColor(color(hex))
+        ctx.fillPath()
+    }
+
+    // Background: a solid charcoal squircle with a hairline edge so it stays visible on a dark Dock.
     let shape = squircle(in: body)
-
-    // Soft drop shadow under the shape.
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: color(0x000000, 0.32))
-    ctx.addPath(shape)
-    ctx.setFillColor(color(0x4338CA))
-    ctx.fillPath()
-    ctx.restoreGState()
-
-    // Background gradient: indigo (top left) to violet (bottom right).
-    ctx.saveGState()
-    ctx.addPath(shape)
-    ctx.clip()
-    ctx.drawLinearGradient(linearGradient([color(0x5B6CFF), color(0x6D4AF0), color(0x9A3FD8)], [0, 0.55, 1]),
-                           start: CGPoint(x: body.minX, y: body.maxY), end: CGPoint(x: body.maxX, y: body.minY), options: [])
-    // Gentle light from the top for depth.
-    ctx.drawRadialGradient(linearGradient([color(0xFFFFFF, 0.22), color(0xFFFFFF, 0)], [0, 1]),
-                           startCenter: CGPoint(x: 512, y: 980), startRadius: 0,
-                           endCenter: CGPoint(x: 512, y: 980), endRadius: 720, options: [])
-    // Thin inner highlight along the edge (dropped at tiny sizes).
+    fill(shape, charcoal)
     if !small {
+        ctx.saveGState()
         ctx.addPath(shape)
-        ctx.setStrokeColor(color(0xFFFFFF, 0.18))
-        ctx.setLineWidth(6)
+        ctx.clip()
+        ctx.addPath(shape)
+        ctx.setStrokeColor(color(0x3A3A3C))
+        ctx.setLineWidth(8) // half of it is clipped away, leaving a 4pt inner edge
         ctx.strokePath()
-    }
-    ctx.restoreGState()
-
-    // --- Text lines (the "document") ---
-    let lineColor = color(0xFFFFFF, small ? 0.55 : 0.42)
-    let lineHeight: CGFloat = 46
-    let left: CGFloat = 238
-    func textLine(y: CGFloat, width: CGFloat, alpha: CGFloat? = nil) {
-        ctx.addPath(roundedRect(CGRect(x: left, y: y, width: width, height: lineHeight), radius: lineHeight / 2))
-        ctx.setFillColor(alpha.map { color(0xFFFFFF, $0) } ?? lineColor)
-        ctx.fillPath()
+        ctx.restoreGState()
     }
 
-    // --- Selected text: a warm highlight with a darker text bar inside ---
-    let selection = CGRect(x: 214, y: 360, width: 596, height: 124)
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -6), blur: 18, color: color(0x2A0A55, 0.35))
-    ctx.addPath(roundedRect(selection, radius: 20))
-    ctx.setFillColor(color(0xFFC83D))
-    ctx.fillPath()
-    ctx.restoreGState()
-    ctx.saveGState()
-    ctx.addPath(roundedRect(selection, radius: 20))
-    ctx.clip()
-    ctx.drawLinearGradient(linearGradient([color(0xFFE07A), color(0xFFB627)], [0, 1]),
-                           start: CGPoint(x: 0, y: selection.maxY), end: CGPoint(x: 0, y: selection.minY), options: [])
-    ctx.restoreGState()
-    // The selected words (left out at tiny sizes, where a solid highlight reads better).
-    if !small {
-        ctx.addPath(roundedRect(CGRect(x: selection.minX + 44, y: selection.midY - 25, width: 300, height: 50), radius: 25))
-        ctx.addPath(roundedRect(CGRect(x: selection.minX + 372, y: selection.midY - 25, width: 180, height: 50), radius: 25))
-        ctx.setFillColor(color(0x7A3E00, 0.55))
-        ctx.fillPath()
-    }
-
-    if !small {
-        // Selection handles at both ends.
-        let handleColor = color(0xFFFFFF, 0.95)
-        for (x, top) in [(selection.minX - 2, true), (selection.maxX + 2, false)] {
-            ctx.setFillColor(handleColor)
-            ctx.addPath(roundedRect(CGRect(x: x - 5, y: selection.minY - 8, width: 10, height: selection.height + 16), radius: 5))
-            ctx.fillPath()
-            let cy = top ? selection.maxY + 14 : selection.minY - 14
-            ctx.fillEllipse(in: CGRect(x: x - 17, y: cy - 17, width: 34, height: 34))
-        }
-        // Surrounding lines of text.
-        textLine(y: 264, width: 470)
-        textLine(y: 188, width: 330, alpha: 0.3)
-    } else {
-        textLine(y: 250, width: 420)
-    }
-
-    // --- Floating action bar: dark pill with three dots and a pointer to the selection ---
-    let pill = CGRect(x: 232, y: 592, width: 560, height: 196)
-    let pointer = CGMutablePath()
-    pointer.move(to: CGPoint(x: 512 - 46, y: pill.minY + 2))
-    pointer.addLine(to: CGPoint(x: 512, y: pill.minY - 46))
-    pointer.addLine(to: CGPoint(x: 512 + 46, y: pill.minY + 2))
-    pointer.closeSubpath()
+    // Floating action bar: a light pill with a pointer and three buttons, the first lit amber.
+    let pill = grid(6, 5.5, 20, 8)
     let bar = CGMutablePath()
     bar.addPath(roundedRect(pill, radius: pill.height / 2))
-    bar.addPath(pointer)
-
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -14), blur: 34, color: color(0x12002E, 0.45))
-    ctx.addPath(bar)
-    ctx.setFillColor(color(0x17142B))
-    ctx.fillPath()
-    ctx.restoreGState()
-    // Subtle top sheen on the pill.
-    ctx.saveGState()
-    ctx.addPath(bar)
-    ctx.clip()
-    ctx.drawLinearGradient(linearGradient([color(0xFFFFFF, 0.12), color(0xFFFFFF, 0)], [0, 1]),
-                           start: CGPoint(x: 0, y: pill.maxY), end: CGPoint(x: 0, y: pill.midY), options: [])
-    ctx.restoreGState()
-
-    // Three "action" dots; the first is lit to suggest a hovered button.
-    let dotRadius: CGFloat = small ? 34 : 30
-    let spacing: CGFloat = 150
-    for i in 0..<3 {
-        let cx = 512 + CGFloat(i - 1) * spacing
-        let cy = pill.midY
-        ctx.setFillColor(i == 0 ? color(0xFFD45C) : color(0xFFFFFF, 0.92))
-        ctx.fillEllipse(in: CGRect(x: cx - dotRadius, y: cy - dotRadius, width: dotRadius * 2, height: dotRadius * 2))
+    bar.move(to: point(14, 13.3))
+    bar.addLine(to: point(16, 15.6))
+    bar.addLine(to: point(18, 13.3))
+    bar.closeSubpath()
+    fill(bar, paper)
+    let dotRadius = (small ? 1.8 : 1.5) * unit
+    for (i, cx) in [CGFloat(11), 16, 21].enumerated() {
+        let c = point(cx, 9.5)
+        ctx.setFillColor(color(i == 0 ? amber : charcoal))
+        ctx.fillEllipse(in: CGRect(x: c.x - dotRadius, y: c.y - dotRadius, width: dotRadius * 2, height: dotRadius * 2))
     }
+
+    // Selected text: a solid amber highlight with the selected words in a deeper amber.
+    let selection = grid(6, 18, 20, 5.5)
+    fill(roundedRect(selection, radius: 1.6 * unit), amber)
     if !small {
-        // Hairline dividers between the buttons.
-        ctx.setFillColor(color(0xFFFFFF, 0.14))
-        for i in 0..<2 {
-            let x = 512 + (CGFloat(i) - 0.5) * spacing
-            ctx.fill(CGRect(x: x - 2, y: pill.midY - 46, width: 4, height: 92))
-        }
+        fill(roundedRect(grid(8, 19.75, 8, 2), radius: unit), amberDeep)
+        fill(roundedRect(grid(18, 19.75, 6, 2), radius: unit), amberDeep)
     }
+
+    // The next line of unselected text.
+    fill(roundedRect(grid(6, 25.5, 14, 2), radius: unit), stone)
 }
 
 // MARK: - Rendering
