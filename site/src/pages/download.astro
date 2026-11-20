@@ -4,12 +4,12 @@ import Base from '../layouts/Base.astro';
 import { codeThemes } from '../lib/code-themes.mjs';
 import Steps from '../components/Steps.astro';
 import { icon } from '../lib/icons';
-import { SITE, url } from '../lib/site';
+import { APP_VERSION, SITE, url } from '../lib/site';
 
 const themes = codeThemes;
 const verify = `cd ~/Downloads
 shasum -a 256 -c SHA256SUMS.txt`;
-const verifyOut = `Glint-1.1.0-macos-universal.zip: OK`;
+const verifyOut = `Glint-${APP_VERSION}-macos-universal.zip: OK`;
 const build = `brew install xcodegen
 git clone https://github.com/SaiBarathR/glint.git
 cd glint

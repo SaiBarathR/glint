@@ -1,3 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+/** The app version in ../project.yml at build time, used for example file names. */
+export const APP_VERSION: string = (() => {
+  try {
+    const yml = fs.readFileSync(path.resolve(process.cwd(), '..', 'project.yml'), 'utf8');
+    return yml.match(/MARKETING_VERSION:\s*"?([0-9.]+)"?/)?.[1] ?? '1.2.0';
+  } catch {
+    return '1.2.0';
+  }
+})();
+
 export const SITE = {
   name: 'Glint',
   url: 'https://saibarathr.github.io/glint/',

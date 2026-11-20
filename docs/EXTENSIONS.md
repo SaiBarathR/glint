@@ -183,7 +183,6 @@ When an action dictionary holds several of these keys, the first one in this ord
 | `shell script file` (`script file`) | Run a script file from the bundle folder. |
 | `applescript` (`apple script`) | Run inline AppleScript (placeholders are filled in). |
 | `applescript file` (`apple script file`) | Run an AppleScript file (`.applescript` or compiled `.scpt`) from the bundle. Placeholders are **not** filled in files. |
-
 | `javascript` (`java script`) | Run inline JavaScript. |
 | `javascript file` (`java script file`) | Run a JavaScript file from the bundle. A file that assigns `exports` is a one-action module. |
 | `key combos` | Press several key combos in sequence (50 ms apart). |
