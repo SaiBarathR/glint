@@ -13,7 +13,13 @@ change its case, format it as JSON, send it to Reminders, and more. You can add 
 **Website:** [saibarathr.github.io/glint](https://saibarathr.github.io/glint/): download, install steps, demo,
 [extension gallery](https://saibarathr.github.io/glint/extensions/) and the [docs](https://saibarathr.github.io/glint/docs/).
 
-<!-- promo-video -->
+[![Glint promo video: select text, get actions](docs/images/promo-poster.jpg)](https://saibarathr.github.io/glint/#videos-title)
+
+▶ Watch the [36-second promo](https://saibarathr.github.io/glint/media/promo.mp4) or the
+[84-second walkthrough](https://saibarathr.github.io/glint/media/demo.mp4) (install, the built-in actions, adding an extension).
+
+<sub>Promo music: "Wallpaper" by Kevin MacLeod (incompetech.com), licensed under
+[Creative Commons: By Attribution 4.0](http://creativecommons.org/licenses/by/4.0/).</sub>
 
 ![The action bar over a selection, with icons for search, cut, copy, paste and more](docs/images/bar-light.png)
 
